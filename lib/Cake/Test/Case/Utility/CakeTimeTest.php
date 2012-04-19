@@ -846,4 +846,246 @@ class CakeTimeTest extends CakeTestCase {
 		$this->assertEquals($this->Time->format($time), $this->Time->i18nFormat($time));
 		$this->assertEquals($this->Time->format($time, '%c'), $this->Time->i18nFormat($time, '%c'));
 	}
+
+/**
+ * test timezone/DateTimeZone as $userOffset argument
+ */
+	public function testDateTimeZoneAsUserOffset() {
+
+		$originalTimezone = date_default_timezone_get();
+		date_default_timezone_set('Asia/Jakarta');
+
+		$expected = 1328631812;
+		$expectedUtc = 1328606612;
+		$expectedUtcString = '2012-02-07 16:23:32';
+		$expectedNice = 'Tue, Feb 7th 2012, 23:23';
+		$expectedNiceUtc = 'Tue, Feb 7th 2012, 16:23';
+		$testTime = '2012-02-07 23:23:32';
+
+		Configure::write('Config.language', 'eng');
+
+		// gmt
+		$time = $this->Time->gmt('Aug 22, 2011');
+		$this->assertEquals(1313971200, $time);
+
+		$time = $this->Time->gmt('Feb 7, 2012 4:23:32pm');
+		$this->assertEquals($expected, $time);
+
+		$time = $this->Time->gmt($expectedUtcString);
+		$this->assertEquals($expected, $time);
+
+		// toUnix
+		$time = $this->Time->toUnix($testTime);
+		$this->assertEquals($expected, $time);
+
+		$tz = 7;
+		$time = $this->Time->toUnix($testTime, $tz);
+		$this->assertEquals($expected, $time);
+
+		$tz = new DateTimeZone('Asia/Jakarta');
+		$time = $this->Time->toUnix($testTime, $tz);
+		$this->assertEquals($expected, $time);
+
+		$tz = 'UTC';
+		$time = $this->Time->toUnix($testTime, $tz);
+		$this->assertEquals($expectedUtc, $time);
+
+		$tz = new DateTimeZone('UTC');
+		$time = $this->Time->toUnix($testTime, $tz);
+		$this->assertEquals($expectedUtc, $time);
+
+		// fromString
+		$time = $this->Time->fromString($testTime);
+		$this->assertEquals($expected, $time);
+
+		$time = $this->Time->fromString($testTime, 7);
+		$this->assertEquals($expected, $time);
+
+		$tz = 'Asia/Jakarta';
+		$time = $this->Time->fromString($testTime, $tz);
+		$this->assertEquals($expected, $time);
+
+		$tz = new DateTimeZone('Asia/Jakarta');
+		$time = $this->Time->fromString($testTime, $tz);
+		$this->assertEquals($expected, $time);
+
+		$tz = new DateTimeZone('UTC');
+		$time = $this->Time->fromString($testTime, $tz);
+		$this->assertEquals($expectedUtc, $time);
+
+		$tz = new DateTimeZone('UTC');
+		$time = $this->Time->convert($this->Time->fromString($testTime), $tz);
+		$this->assertEquals($expectedUtc, $time);
+
+		// nice
+		$tz = new DateTimeZone('Asia/Jakarta');
+		$time = $this->Time->nice($testTime, $tz);
+		$this->assertEquals($expectedNice, $time);
+
+		$tz = new DateTimeZone('UTC');
+		$time = $this->Time->nice($testTime, $tz);
+		$this->assertEquals($expectedNiceUtc, $time);
+
+		// daysAsSql
+		$tz = new DateTimeZone('Asia/Jakarta');
+		$result = $this->Time->daysAsSql($testTime, $testTime, 'created', $tz);
+		$this->assertEquals("(created >= '2012-02-07 00:00:00') AND (created <= '2012-02-07 23:59:59')", $result);
+
+		$tz = 8;
+		$result = $this->Time->daysAsSql($testTime, $testTime, 'created', $tz);
+		$this->assertEquals("(created >= '2012-02-08 00:00:00') AND (created <= '2012-02-08 23:59:59')", $result);
+
+		$tz = new DateTimeZone('Asia/Singapore');
+		$result = $this->Time->daysAsSql($testTime, $testTime, 'created', $tz);
+		$this->assertEquals("(created >= '2012-02-08 00:00:00') AND (created <= '2012-02-08 23:59:59')", $result);
+
+		// dayAsSql
+		$tz = new DateTimeZone('Asia/Singapore');
+		$result = $this->Time->dayAsSql($testTime, 'created', $tz);
+		$this->assertEquals("(created >= '2012-02-07 00:00:00') AND (created <= '2012-02-07 23:59:59')", $result);
+
+		// format
+		$tz = 'UTC';
+		$time = $this->Time->format('Y-m-d H:i:s',$testTime, false, $tz);
+		$this->assertEquals($expectedUtcString, $time);
+
+		$tz = new DateTimeZone('UTC');
+		$time = $this->Time->format('Y-m-d H:i:s',$testTime, false, $tz);
+		$this->assertEquals($expectedUtcString, $time);
+
+		// isToday
+		$tz = 7;
+		$result = $this->Time->isToday(time(), $tz);
+		$this->assertEquals(true, $result);
+
+		$tz = 'Asia/Jakarta';
+		$result = $this->Time->isToday(time(), $tz);
+		$this->assertEquals(true, $result);
+
+		$tz = new DateTimeZone('Asia/Jakarta');
+		$result = $this->Time->isToday(time(), $tz);
+		$this->assertEquals(true, $result);
+
+		$tz = 0;
+		$result = $this->Time->isToday(time(), $tz);
+		$this->assertEquals(true, $result);
+
+		$tz = 'UTC';
+		$result = $this->Time->isToday(time(), $tz);
+		$this->assertEquals(true, $result);
+
+		$tz = new DateTimeZone('UTC');
+		$result = $this->Time->isToday(time(), $tz);
+		$this->assertEquals(true, $result);
+
+		$tz = 7;
+		$yesterday = time() - 86405;
+		$result = $this->Time->isToday($yesterday, $tz);
+		$this->assertEquals(false, $result);
+
+		$tz = 'Asia/Jakarta';
+		$yesterday = time() - 86405;
+		$result = $this->Time->isToday($yesterday, $tz);
+		$this->assertEquals(false, $result);
+
+		$tz = new DateTimeZone('Asia/Singapore');
+		$yesterday = time() - 86405;
+		$result = $this->Time->isToday($yesterday, $tz);
+		$this->assertEquals(false, $result);
+
+		// isThisWeek
+		$tz = 7;
+		$result = $this->Time->isThisWeek(time(), $tz);
+		$this->assertEquals(true, $result);
+
+		$tz = 'Asia/Jakarta';
+		$result = $this->Time->isThisWeek(time(), $tz);
+		$this->assertEquals(true, $result);
+
+		$tz = new DateTimeZone('Asia/Jakarta');
+		$result = $this->Time->isThisWeek(time(), $tz);
+		$this->assertEquals(true, $result);
+
+		$tz = new DateTimeZone('Asia/Jakarta');
+		$result = $this->Time->isThisWeek(time() - 86400 * 7, $tz);
+		$this->assertEquals(false, $result);
+
+		// isThisMonth
+		$tz = new DateTimeZone('Asia/Jakarta');
+		$result = $this->Time->isThisMonth(time(), $tz);
+		$this->assertEquals(true, $result);
+
+		$tz = new DateTimeZone('Asia/Jakarta');
+		$result = $this->Time->isThisMonth(time() - 86400 * 31, $tz);
+		$this->assertEquals(false, $result);
+
+		// isThisYear
+		$tz = new DateTimeZone('Asia/Jakarta');
+		$result = $this->Time->isThisYear(time(), $tz);
+		$this->assertEquals(true, $result);
+
+		$tz = new DateTimeZone('Asia/Jakarta');
+		$result = $this->Time->isThisYear(time() - 86400 * 365, $tz);
+		$this->assertEquals(false, $result);
+
+		// isTomorrow
+		$tz = new DateTimeZone('Asia/Jakarta');
+		$result = $this->Time->isTomorrow(time(), $tz);
+		$this->assertEquals(false, $result);
+
+		$tz = new DateTimeZone('Asia/Jakarta');
+		$result = $this->Time->isTomorrow(time() + 3600 * 15, $tz);
+		$this->assertEquals(true, $result);
+
+		// wasYesterday
+		$tz = 7;
+		$yesterday = time() - 86405;
+		$result = $this->Time->wasYesterday($yesterday, $tz);
+		$this->assertEquals(true, $result);
+
+		$tz = 'Asia/Jakarta';
+		$result = $this->Time->wasYesterday($yesterday, $tz);
+		$this->assertEquals(true, $result);
+
+		$tz = new DateTimeZone('Asia/Jakarta');
+		$result = $this->Time->wasYesterday($yesterday, $tz);
+		$this->assertEquals(true, $result);
+
+		$tz = 0;
+		$result = $this->Time->wasYesterday($yesterday, $tz);
+		$this->assertEquals(true, $result);
+
+		$tz = 'UTC';
+		$result = $this->Time->wasYesterday($yesterday, $tz);
+		$this->assertEquals(true, $result);
+
+		$tz = new DateTimeZone('UTC');
+		$result = $this->Time->wasYesterday($yesterday, $tz);
+		$this->assertEquals(true, $result);
+
+		// toAtom
+		$tz = new DateTimeZone('UTC');
+		$result = $this->Time->toAtom($testTime, $tz);
+		$this->assertEquals('2012-02-07T16:23:32Z', $result);
+
+		// toRSS
+		$tz = 7;
+		$result = $this->Time->toRSS($testTime, $tz);
+		$this->assertEquals('Tue, 07 Feb 2012 23:23:32 +0700', $result);
+
+		$tz = new DateTimeZone('Asia/Jakarta');
+		$result = $this->Time->toRSS($testTime, $tz);
+		$this->assertEquals('Tue, 07 Feb 2012 23:23:32 +0700', $result);
+
+		$tz = 0;
+		$result = $this->Time->toRSS($testTime, $tz);
+		$this->assertEquals('Tue, 07 Feb 2012 16:23:32 +0000', $result);
+
+		$tz = new DateTimeZone('UTC');
+		$result = $this->Time->toRSS($testTime, $tz);
+		$this->assertEquals('Tue, 07 Feb 2012 16:23:32 +0000', $result);
+
+		date_default_timezone_set($originalTimezone);
+	}
+
 }
