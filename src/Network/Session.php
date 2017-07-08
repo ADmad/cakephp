@@ -65,6 +65,13 @@ class Session
     protected $_isCLI = false;
 
     /**
+     * Session ini options.
+     *
+     * @var array
+     */
+    protected $_options = [];
+
+    /**
      * Returns a new instance of a session after building a configuration bundle for it.
      * This function allows an options array which will be used for configuring the session
      * and the handler to be used. The most important key in the configuration array is
@@ -287,6 +294,22 @@ class Session
             return;
         }
 
+        if (version_compare(PHP_VERSION, '7.0.0') >= 0) {
+            $keys = array_map(
+                function ($item) {
+                    return str_replace('session.', '', $item);
+                },
+                array_keys($options)
+            );
+
+            $this->_options = array_combine(
+                $keys,
+                array_values($options)
+            );
+
+            return;
+        }
+
         foreach ($options as $setting => $value) {
             if (ini_set($setting, (string)$value) === false) {
                 throw new RuntimeException(
@@ -323,7 +346,7 @@ class Session
             return false;
         }
 
-        if (!session_start()) {
+        if (!session_start($this->_options)) {
             throw new RuntimeException('Could not start the session');
         }
 
