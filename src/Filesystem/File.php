@@ -20,6 +20,8 @@ use SplFileInfo;
 
 /**
  * Convenience class for reading, writing and appending to files.
+ *
+ * @deprecated 4.0.0 Will be removed in 5.0.
  */
 class File
 {
@@ -83,6 +85,8 @@ class File
      */
     public function __construct(string $path, bool $create = false, int $mode = 0755)
     {
+        deprecationWarning('File class is deprecated and will be removed in 5.0.0');
+
         $splInfo = new SplFileInfo($path);
         $this->Folder = new Folder($splInfo->getPath(), $create, $mode);
         if (!is_dir($path)) {
