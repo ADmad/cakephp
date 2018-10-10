@@ -1,47 +1,152 @@
-# PHP
-# Test and package your PHP project.
-# Add steps that run tests, save build artifacts, deploy, and more:
-# https://docs.microsoft.com/azure/devops/pipelines/languages/php
-
 jobs:
-- job: Linux
-  pool:
-    vmImage: 'ubuntu-16.04'
-
-  variables:
-    phpVersion: 7.2
-
-  steps:
-  - script: |
-      sudo update-alternatives --set php /usr/bin/php$(phpVersion)
-      sudo update-alternatives --set phar /usr/bin/phar$(phpVersion)
-      sudo update-alternatives --set phpdbg /usr/bin/phpdbg$(phpVersion)
-      sudo update-alternatives --set php-cgi /usr/bin/php-cgi$(phpVersion)
-      sudo update-alternatives --set phar.phar /usr/bin/phar.phar$(phpVersion)
-      php -version
-    displayName: 'Use PHP version $(phpVersion)'
-
-  - script: composer install --no-interaction --prefer-dist
-    displayName: 'composer install'
-
-  - script: vendor/bin/phpunit
-    displayName: 'Run tests with phpunit'
 
 - job: Windows
   pool:
     vmImage: 'vs2017-win2016'
 
+  steps:
+  - powershell: |
+      choco install sql-server-express -y
+      Get-Content -Path 'C:\ProgramData\chocolatey\logs\chocolatey.log'
+      choco install sqlserver-cmdlineutils -y
+      refreshenv
+      sqlcmd -S ".\SQL2017" -U sa -P Password17! -Q "create database cakephp;"
+    displayName: 'Install SQLServer 2017'
+
+  - script: choco install php --params '""/InstallDir:C:\php""'
+    displayName: 'Install PHP'
+
+  - script: |
+      echo date.timezone="UTC" >> php.ini
+      echo extension_dir=ext >> php.ini
+      echo extension=php_openssl.dll >> php.ini
+      echo extension=php_mbstring.dll >> php.ini
+      echo extension=php_intl.dll >> php.ini
+      echo extension=php_fileinfo.dll >> php.ini
+    workingDirectory: 'C:\php'
+    displayName: 'Configure PHP'
+
+  - powershell: Invoke-WebRequest -Uri https://getcomposer.org/composer.phar -OutFile composer.phar
+    displayName: 'Download composer'
+
+  - powershell: |
+      $env:Path += ";C:\php"
+      php composer.phar install --no-interaction --prefer-dist
+    displayName: 'composer install'
+
+  - powershell: |
+      $env:Path += ";C:\php"
+      vendor/bin/phpunit.bat
+    env:
+      db_dsn: 'sqlserver://sa:Password17!@.\SQL2017/cakephp?MultipleActiveResultSets=false'
+    displayName: 'Run tests with phpunit'
+
+- job: Linux
+  pool:
+    vmImage: 'ubuntu-16.04'
+
   variables:
-    phpVersion: 7.2
+    agent.source.git.shallowFetchDepth: 10
+    default: 1
+    dbDsn: 'sqlite:///:memory:'
+    mysqlDsn: 'mysql://root:root@127.0.0.1/cakephp_test?init[]=SET sql_mode = "STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"'
+    pgsqlDsn: 'postgres://postgres@127.0.0.1/cakephp_test'
+
+  strategy:
+    matrix:
+      php-72-sqlite:
+        phpVersion: 7.2
+      php-72-mysql:
+        db: 'mysql'
+        phpVersion: 7.2
+        dbDsn: $(mysqlDsn)
+      php-72-postgres:
+        db: 'pgsql'
+        dbDsn: $(pgsqlDsn)
+        phpVersion: 7.2
+      php-71-sqlite:
+        phpVersion: 7.1
+      php-71-mysql:
+        db: 'mysql'
+        dbDsn: $(mysqlDsn)
+        phpVersion: 7.1
+      php-71-postgres:
+        db: 'pgsql'
+        dbDsn: $(pgsqlDsn)
+        phpVersion: 7.1
+      php-70-sqlite:
+        phpVersion: 7.0
+      php-70-mysql:
+        db: 'mysql'
+        dbDsn: $(mysqlDsn)
+        phpVersion: 7.0
+      php-70-postgres:
+        db: 'pgsql'
+        dbDsn: $(pgsqlDsn)
+        phpVersion: 7.0
+      php-56-sqlite:
+        phpVersion: 5.6
+      php-56-mysql:
+        db: 'mysql'
+        dbDsn: $(mysqlDsn)
+        phpVersion: 5.6
+      php-56-postgres:
+        db: 'pgsql'
+        dbDsn: $(pgsqlDsn)
+        phpVersion: 5.6
+      phpcs:
+        default: 0
+        phpcs: 1
+        phpVersion: 7.2
 
   steps:
   - script: |
-      choco install php 
-      php -version
-    displayName: 'Install PHP'
+      mysql -u root -proot -e 'CREATE DATABASE cakephp_test;'
+      mysql -u root -proot -e 'CREATE DATABASE cakephp_test2;'
+      mysql -u root -proot -e 'CREATE DATABASE cakephp_test3;'
+    condition: eq(variables['db'], 'mysql')
+    displayName: 'Setup MySQL'
+
+  - script: |
+      sudo apt install postgresql postgresql-contrib -y
+      sudo -u postgres psql -c 'CREATE DATABASE cakephp_test;' -U postgres
+      sudo -u postgres psql -c 'CREATE SCHEMA test2;' -U postgres -d cakephp_test
+      sudo -u postgres psql -c 'CREATE SCHEMA test3;' -U postgres -d cakephp_test
+      sudo sh -c 'echo "host    all    all    127.0.0.1/32    trust" > /etc/postgresql/9.5/main/pg_hba.conf'
+      sudo sh -c 'cat /etc/postgresql/9.5/main/pg_hba.conf'
+      sudo pg_ctlcluster 9.5 main reload
+    condition: eq(variables['db'], 'pgsql')
+    displayName: 'Setup PostgreSQL'
+
+  - bash: |
+      sudo update-alternatives --set php /usr/bin/php$(phpVersion)
+      sudo update-alternatives --set phar /usr/bin/phar$(phpVersion)
+      sudo update-alternatives --set phpdbg /usr/bin/phpdbg$(phpVersion)
+      sudo update-alternatives --set php-cgi /usr/bin/php-cgi$(phpVersion)
+      sudo update-alternatives --set phar.phar /usr/bin/phar.phar$(phpVersion)
+      sudo phpdismod xdebug
+      sudo sh -c 'echo "apc.enable_cli = 1" >> /etc/php/$(phpVersion)/cli/php.ini'
+      if [[ $DEFAULT == 1 && $PHPVERSION != 5.6 ]]; then sudo apt install memcached -y; fi
+      if [[ $DEFAULT == 1 ]]; then sudo apt install redis-server -y; fi
+      sudo locale-gen da_DK
+      sudo locale-gen de_DE
+    displayName: 'Setup PHP $(phpVersion) and other services'
 
   - script: composer install --no-interaction --prefer-dist
     displayName: 'composer install'
 
-  - script: vendor/bin/phpunit
-    displayName: 'Run tests with phpunit'
+  - bash: |
+      if [[ $PHPVERSION = 7.2 ]]; then export CODECOVERAGE=1; phpdbg -qrr vendor/bin/phpunit --coverage-clover=clover.xml; fi
+      if [[ $PHPVERSION != 7.2 ]]; then vendor/bin/phpunit -v; fi
+    condition: eq(variables['default'], 1)
+    env:
+      db_dsn: $(dbDsn)
+    displayName: 'Run tests'
+
+  - script: composer cs-check
+    condition: eq(variables['phpcs'], 1)
+    displayName: 'Run PHPCS check'
+
+  - script: bash <(wget https://codecov.io/bash)
+    condition: and(succeeded(), eq(variables['default'], 1), eq(variables['phpVersion'], 7.2))
+    displayName: 'Submit coverage info. codecov'
