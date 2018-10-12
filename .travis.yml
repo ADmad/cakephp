@@ -41,6 +41,9 @@ matrix:
 
   include:
     - php: 7.0
+      env: DB=mssql db_dsn=sqlserver://SA:Password12!@localhost/cakephp?MultipleActiveResultSets=false
+
+    - php: 7.0
       env: PHPCS=1 DEFAULT=0
 
     - php: 7.1
@@ -59,6 +62,14 @@ before_install:
   - if [ $DB = 'pgsql' ]; then psql -c 'CREATE SCHEMA test3;' -U postgres -d cakephp_test; fi
 
   - if [[ $DEFAULT = 1 || $PHPSTAN = 1 ]] ; then pecl channel-update pecl.php.net; fi;
+
+  - |
+    if [[ $DB = 'mssql' ]]; then
+      ./install_sql_server.sh
+      echo "yes" | pecl install sqlsrv
+      echo "yes" | pecl install pdo_sqlsrv
+    fi
+
   - |
       if [[ ${TRAVIS_PHP_VERSION} != "7.3.0RC1" && ${TRAVIS_PHP_VERSION} != "5.6" && ($DEFAULT = 1 || $PHPSTAN = 1) ]]; then
         echo 'extension = memcached.so' >> ~/.phpenv/versions/$(phpenv version-name)/etc/php.ini;
