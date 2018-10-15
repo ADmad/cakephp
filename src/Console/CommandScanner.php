@@ -18,8 +18,9 @@ namespace Cake\Console;
 use Cake\Core\App;
 use Cake\Core\Configure;
 use Cake\Core\Plugin;
-use Cake\Filesystem\Folder;
 use Cake\Utility\Inflector;
+use DirectoryIterator;
+use RegexIterator;
 
 /**
  * Used by CommandCollection and CommandTask to scan the filesystem
@@ -109,40 +110,37 @@ class CommandScanner
      */
     protected function scanDir(string $path, string $namespace, string $prefix, array $hide): array
     {
-        $dir = new Folder($path);
-        $contents = $dir->read(true, true);
-        if (empty($contents[1])) {
+        if (!is_dir($path)) {
             return [];
         }
 
+        $directory = new DirectoryIterator($path);
+        $files = new RegexIterator($directory, '/(Shell|Command)\.php$/');
+
         $classPattern = '/(Shell|Command)$/';
         $shells = [];
-        foreach ($contents[1] as $file) {
-            if (substr($file, -4) !== '.php') {
-                continue;
-            }
-            $shell = substr($file, 0, -4);
-            if (!preg_match($classPattern, $shell)) {
-                continue;
-            }
-
+        foreach ($files as $file) {
+            $fileName = $file->getFilename();
+            $shell = substr($fileName, 0, -4);
             $name = Inflector::underscore(preg_replace($classPattern, '', $shell));
             if (in_array($name, $hide, true)) {
                 continue;
             }
-
             $class = $namespace . $shell;
-            if (!is_subclass_of($class, Shell::class) && !is_subclass_of($class, Command::class)) {
+            if (!is_subclass_of($class, Shell::class)
+                && !is_subclass_of($class, Command::class)
+            ) {
                 continue;
             }
-
-            $shells[] = [
-                'file' => $path . $file,
+            $shells[$path . $fileName] = [
+                'file' => $path . $fileName,
                 'fullName' => $prefix . $name,
                 'name' => $name,
                 'class' => $class,
             ];
         }
+
+        ksort($shells);
 
         return $shells;
     }
