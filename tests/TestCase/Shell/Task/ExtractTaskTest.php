@@ -16,7 +16,6 @@ declare(strict_types=1);
 namespace Cake\Test\TestCase\Shell\Task;
 
 use Cake\Core\Plugin;
-use Cake\Filesystem\Folder;
 use Cake\TestSuite\TestCase;
 
 /**
@@ -50,7 +49,9 @@ class ExtractTaskTest extends TestCase
             ->setConstructorArgs([$this->io])
             ->getMock();
         $this->path = TMP . 'tests/extract_task_test';
-        new Folder($this->path . DS . 'locale', true);
+
+        // @codingStandardsIgnoreLine
+        @mkdir($this->path . DS . 'locale');
     }
 
     /**
@@ -63,8 +64,7 @@ class ExtractTaskTest extends TestCase
         parent::tearDown();
         unset($this->Task);
 
-        $Folder = new Folder($this->path);
-        $Folder->delete();
+        deleteDir($this->path);
         Plugin::unload();
     }
 

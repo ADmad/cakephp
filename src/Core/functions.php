@@ -317,3 +317,34 @@ if (!function_exists('getTypeName')) {
         return is_object($var) ? get_class($var) : gettype($var);
     }
 }
+
+if (!function_exists('deleteDir')) {
+    /**
+     * Recursively delete a directory.
+     *
+     * @param string $path Directory path.
+     * @return void
+     */
+    function deleteDir(string $path): void
+    {
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+
+        foreach ($iterator as $fileInfo) {
+            switch ($fileInfo->getType()) {
+                case 'dir':
+                    rmdir($fileInfo->getRealPath());
+                    break;
+                case 'link':
+                    unlink($fileInfo->getPathname());
+                    break;
+                default:
+                    unlink($fileInfo->getRealPath());
+            }
+        }
+
+        rmdir($path);
+    }
+}

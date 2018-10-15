@@ -18,8 +18,10 @@ namespace Cake\Shell\Task;
 use Cake\Console\ConsoleOptionParser;
 use Cake\Console\Shell;
 use Cake\Core\Plugin;
-use Cake\Filesystem\Folder;
 use Cake\Utility\Inflector;
+use DirectoryIterator;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 
 /**
  * Task for symlinking / copying plugin assets to app's webroot.
@@ -231,8 +233,27 @@ class AssetsTask extends Shell
             }
         }
 
-        $folder = new Folder($dest);
-        if ($folder->delete()) {
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($dest, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+
+        foreach ($iterator as $file) {
+            switch ($file->getType()) {
+                case 'dir':
+                    rmdir($file->getRealPath());
+                    break;
+                case 'link':
+                    unlink($file->getPathname());
+                    break;
+                default:
+                    unlink($file->getRealPath());
+            }
+        }
+
+        $result = rmdir($dest);
+
+        if ($result) {
             $this->out('Deleted ' . $dest);
 
             return true;
@@ -299,8 +320,31 @@ class AssetsTask extends Shell
      */
     protected function _copyDirectory(string $source, string $destination): bool
     {
-        $folder = new Folder($source);
-        if ($folder->copy($destination)) {
+        if (!is_dir($destination) && !$this->_createDirectory($destination)) {
+            return false;
+        }
+
+        $iterator = new DirectoryIterator($source);
+        $result = true;
+        foreach ($iterator as $fileInfo) {
+            if ($fileInfo->isDot()) {
+                continue;
+            }
+
+            if ($fileInfo->isDir()) {
+                $result &= $this->_copyDirectory(
+                    $fileInfo->getRealPath() . DS,
+                    $destination . DS . $fileInfo->getFilename()
+                );
+            } else {
+                $result &= copy(
+                    $fileInfo->getRealPath(),
+                    $destination . DS . $fileInfo->getFilename()
+                );
+            }
+        }
+
+        if ($result) {
             $this->out('Copied assets to directory ' . $destination);
 
             return true;

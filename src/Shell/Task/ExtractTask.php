@@ -21,8 +21,10 @@ use Cake\Core\App;
 use Cake\Core\Exception\MissingPluginException;
 use Cake\Core\Plugin;
 use Cake\Filesystem\File;
-use Cake\Filesystem\Folder;
 use Cake\Utility\Inflector;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use RegexIterator;
 
 /**
  * Language string extractor
@@ -765,13 +767,20 @@ class ExtractTask extends Shell
         }
         foreach ($this->_paths as $path) {
             $path = realpath($path) . DIRECTORY_SEPARATOR;
-            $Folder = new Folder($path);
-            $files = $Folder->findRecursive('.*\.(php|ctp|thtml|inc|tpl)', true);
-            if (!empty($pattern)) {
-                $files = preg_grep($pattern, $files, PREG_GREP_INVERT);
-                $files = array_values($files);
+            $directory = new RecursiveDirectoryIterator(
+                $path,
+                RecursiveDirectoryIterator::CURRENT_AS_PATHNAME
+            );
+            $flattend = new RecursiveIteratorIterator($directory);
+            $files = new RegexIterator($flattend, '/\.php/');
+
+            foreach ($files as $filePath) {
+                if (!empty($pattern) && preg_match($pattern, $filePath)) {
+                    continue;
+                }
+
+                $this->_files[] = $filePath;
             }
-            $this->_files = array_merge($this->_files, $files);
         }
         $this->_files = array_unique($this->_files);
     }

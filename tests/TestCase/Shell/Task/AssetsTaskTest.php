@@ -16,7 +16,6 @@ declare(strict_types=1);
 namespace Cake\Test\TestCase\Shell\Task;
 
 use Cake\Core\Plugin;
-use Cake\Filesystem\Folder;
 use Cake\TestSuite\TestCase;
 
 /**
@@ -75,8 +74,7 @@ class AssetsTaskTest extends TestCase
         $this->assertFileExists($path . DS . 'root.js');
         if (DS === '\\') {
             $this->assertDirectoryExists($path);
-            $folder = new Folder($path);
-            $folder->delete();
+            deleteDir($path);
         } else {
             $this->assertTrue(is_link($path));
             unlink($path);
@@ -88,8 +86,7 @@ class AssetsTaskTest extends TestCase
         // symlinking fails and the assets folder is copied as fallback.
         $this->assertDirectoryExists($path);
         $this->assertFileExists($path . DS . 'css' . DS . 'company.css');
-        $folder = new Folder(WWW_ROOT . 'company');
-        $folder->delete();
+        deleteDir(WWW_ROOT . 'company');
     }
 
     /**
@@ -111,8 +108,7 @@ class AssetsTaskTest extends TestCase
             $this->assertTrue(is_link($path));
         }
         $this->assertFileExists($path . DS . 'css' . DS . 'company.css');
-        $folder = new Folder(WWW_ROOT . 'company');
-        $folder->delete();
+        deleteDir(WWW_ROOT . 'company');
     }
 
     /**
@@ -185,15 +181,13 @@ class AssetsTaskTest extends TestCase
         $this->assertDirectoryExists($path);
         $this->assertFileExists($path . DS . 'root.js');
 
-        $folder = new Folder($path);
-        $folder->delete();
+        deleteDir($path);
 
         $path = WWW_ROOT . 'company' . DS . 'test_plugin_three';
         $this->assertDirectoryExists($path);
         $this->assertFileExists($path . DS . 'css' . DS . 'company.css');
 
-        $folder = new Folder(WWW_ROOT . 'company');
-        $folder->delete();
+        deleteDir(WWW_ROOT . 'company');
     }
 
     /**
@@ -225,8 +219,7 @@ class AssetsTaskTest extends TestCase
 
         $this->assertFileEquals($path . DS . 'root.js', $pluginPath . DS . 'root.js');
 
-        $folder = new Folder($path);
-        $folder->delete();
+        deleteDir($path);
     }
 
     /**
@@ -313,8 +306,7 @@ class AssetsTaskTest extends TestCase
         $this->assertTrue($newfilectime !== $filectime);
 
         if (DS === '\\') {
-            $folder = new Folder($path);
-            $folder->delete();
+            deleteDir($path);
         } else {
             unlink($path);
         }
@@ -330,7 +322,6 @@ class AssetsTaskTest extends TestCase
         $newfilectime = filectime($path);
         $this->assertTrue($newfilectime > $filectime);
 
-        $folder = new Folder(WWW_ROOT . 'company');
-        $folder->delete();
+        deleteDir(WWW_ROOT . 'company');
     }
 }
