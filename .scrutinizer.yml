@@ -1,5 +1,20 @@
-checks:
-  php: true
+# checks:
+#   php: true
 
-filter:
-  paths: ['src/*']
+# filter:
+#   paths: ['src/*']
+
+tools:
+  external_code_coverage:
+    timeout: 1200
+    runs: 3
+
+build:
+  environment:
+    php:
+        version: "7.1"
+  nodes:
+    phpcs:
+      tests:
+        override:
+        - phpcs-run

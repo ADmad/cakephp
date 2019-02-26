@@ -1,6 +1,7 @@
 language: php
 
 php:
+  - 7.1
   - 7.0
   - 5.6
   - 7.2
@@ -15,7 +16,6 @@ env:
     - DB=pgsql db_dsn='postgres://postgres@127.0.0.1/cakephp_test'
   global:
     - DEFAULT=1
-    - CODECOVERAGE=0
     - CHECKS=0
 
 services:
@@ -41,9 +41,6 @@ matrix:
 
     - php: 7.2
       env: CHECKS=1 DEFAULT=0
-
-    - php: 7.1
-      env: CODECOVERAGE=1 DEFAULT=0
 
 before_install:
   - echo cakephp version && tail -1 VERSION.txt
@@ -88,16 +85,20 @@ before_script:
   - if [[ $PREFER_LOWEST == 1 ]]; then composer require --dev dereuromark/composer-prefer-lowest; fi
 
 script:
-  - if [[ $DEFAULT == 1 ]]; then vendor/bin/phpunit; fi
-  - if [[ $PREFER_LOWEST == 1 ]]; then vendor/bin/validate-prefer-lowest; fi
+  - if [[ $DEFAULT = 1 && $TRAVIS_PHP_VERSION != 7.1 ]]; then vendor/bin/phpunit; fi
+  - if [[ $DEFAULT = 1 && $TRAVIS_PHP_VERSION = 7.1 ]]; then export CODECOVERAGE=1; phpdbg -qrr vendor/bin/phpunit --coverage-clover=clover.xml; fi
 
-  - if [[ $CODECOVERAGE == 1 ]]; then phpdbg -qrr vendor/bin/phpunit --coverage-clover=clover.xml; fi
+  - if [[ $PREFER_LOWEST == 1 ]]; then vendor/bin/validate-prefer-lowest; fi
 
   - if [[ $CHECKS == 1 ]]; then composer require --dev phpstan/phpstan:^0.11 && vendor/bin/phpstan analyse -c phpstan.neon -l 2 src/; fi
   - if [[ $CHECKS == 1 ]]; then composer cs-check; fi
 
 after_success:
-  - if [[ $CODECOVERAGE == 1 ]]; then bash <(curl -s https://codecov.io/bash); fi
+  - |
+      if [[ $DEFAULT = 1 && $TRAVIS_PHP_VERSION = 7.1 ]]; then
+        wget https://scrutinizer-ci.com/ocular.phar
+        php ocular.phar code-coverage:upload --format=php-clover coverage.xml
+      fi
 
 notifications:
   email: false
