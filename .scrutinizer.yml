@@ -22,10 +22,10 @@ build:
       dependencies:
         override:
           - pecl install apcu
-          - composer require --dev psalm/phar:^3.4
+          - composer require --dev vimeo/psalm:^3.4
       tests:
         override:
-          - command: vendor/bin/psalm.phar --report-show-info=false --report=checkstyle.xml
+          - command: vendor/bin/psalm --report-show-info=false --report=checkstyle.xml
             analysis:
               file: checkstyle.xml
               format: 'general-checkstyle'
