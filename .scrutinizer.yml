@@ -27,8 +27,15 @@ build:
           - composer stan-setup
       tests:
         override:
-          - vendor/bin/phpstan.phar analyse src/
-          - vendor/bin/psalm.phar --show-info=false
+          - command: vendor/bin/psalm.phar --show-info=false --report-show-info=false --report=psalm-checkstyle.xml
+            analysis:
+              file: psalm-checkstyle.xml
+              format: 'general-checkstyle'
+
+          - command: vendor/bin/phpstan.phar analyse --error-format checkstyle src/ | sed '/^$/d' > phpstan-checkstyle.xml
+            analysis:
+              file: phpstan-checkstyle.xml
+              format: 'general-checkstyle'
 
 build_failure_conditions:
   # Issues reported by any analyzer (which generates report in checkstyle format) like phpcs

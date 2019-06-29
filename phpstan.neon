@@ -31,8 +31,6 @@ parameters:
         - '#Parameter \#1 \$assoc of method Cake\\ORM\\Marshaller::_belongsToMany\(\) expects .+BelongsToMany, Cake\\ORM\\Association given.#'
         - '#Parameter \#2 \$assoc of method Cake\\ORM\\Marshaller::_mergeBelongsToMany\(\) expects .+BelongsToMany, Cake\\ORM\\Association given.#'
         - '#Parameter \#1 \$table of method Cake\\ORM\\Query::addDefaultTypes\(\) expects Cake\\ORM\\Table, .+RepositoryInterface given.#'
-        - '#Parameter \#1 \$table of method Cake\\ORM\\Query::_addAssociationsToTypeMap\(\) expects Cake\\ORM\\Table, .+RepositoryInterface given.#'
-        - '#Property Cake\\Controller\\Controller::\$response \(Cake\\Http\\Response\) does not accept Psr\\Http\\Message\\ResponseInterface#'
         -
             message: '#Right side of && is always false#'
             path: 'src/Cache/Engine/MemcachedEngine.php'
