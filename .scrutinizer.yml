@@ -14,7 +14,23 @@ build:
         override:
           - phpcs-run src/ tests/
 
-    static-analysis:
+    psalm:
+      environment:
+        php:
+          ini:
+            'memory_limit': -1
+      dependencies:
+        override:
+          - pecl install apcu
+          - composer require --dev psalm/phar:^3.4
+      tests:
+        override:
+          - command: vendor/bin/psalm.phar --report-show-info=false --report=checkstyle.xml
+            analysis:
+              file: checkstyle.xml
+              format: 'general-checkstyle'
+
+    phpstan:
       environment:
         php:
           ini:
@@ -24,11 +40,10 @@ build:
           - pecl install apcu
           - pecl install redis
           - pecl install memcached
-          - composer stan-setup
+          - composer require --dev phpstan/phpstan-shim:^0.11
       tests:
         override:
           - vendor/bin/phpstan.phar analyse src/
-          - vendor/bin/psalm.phar --show-info=false
 
 build_failure_conditions:
   # Issues reported by any analyzer (which generates report in checkstyle format) like phpcs
