@@ -56,10 +56,17 @@ install:
 script:
   - |
       if [[ $TRAVIS_PHP_VERSION == '7.2' ]]; then
-        # This is necessary to skip memory usage tests
-        CODECOVERAGE=1 vendor/bin/phpunit --coverage-clover=clover.xml
+        if [[ $DB == 'mysql' ]]; then
+          CODECOVERAGE=1 vendor/bin/phpunit --coverage-clover=clover-mysql.xml
+        else
+          CODECOVERAGE=1 vendor/bin/phpunit --testsuite database --coverage-clover=clover-${DB}.xml
+        fi
       else
-        vendor/bin/phpunit
+        if [[ $DB == 'mysql' ]]; then
+          vendor/bin/phpunit
+        else
+          vendor/bin/phpunit --testsuite database
+        fi
       fi
 
 after_success:
