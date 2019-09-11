@@ -1,4 +1,4 @@
-name: Coding Standard
+name: Coding Standard & Static Analysis
 
 on: [pull_request]
 
@@ -6,21 +6,24 @@ jobs:
   build:
 
     runs-on: ubuntu-18.04
-    
+
     steps:
     - uses: actions/checkout@v1
       with:
         fetch-depth: 10
-        
+
     - name: Setup PHP
       run: |
         sudo apt remove php7.2-fpm
-        sudo apt install php7.2-intl php7.2-mbstring
+        sudo apt install php7.2-intl php7.2-mbstring php7.2-redis php7.2-apcu php7.2-memcached
         sudo update-alternatives --set php /usr/bin/php7.2
         sudo update-alternatives --set phar /usr/bin/phar7.2
-        
+
     - name: composer install
-      run: composer install
-      
+      run: composer stan-setup
+
     - name: Run PHP CodeSniffer
-      run: vendor/bin/phpcs --colors --parallel=16 -p src/ tests/
+      run: vendor/bin/phpcs -p src/ tests/
+
+    - name: Run static analysis
+      run: vendor/bin/psalm.phar --show-info=false
