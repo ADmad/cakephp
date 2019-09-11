@@ -9,8 +9,8 @@ jobs:
       fail-fast: false
       matrix:
         php-version: ['7.2', '7.3']
-        env: [sqlite, mysql]
-    name: Testsuite on PHP ${{matrix.php-version}}
+        db-type: [sqlite, mysql]
+    name: Testsuite on PHP ${{matrix.php-version}} with ${{matrix.db-type}}
 
     steps:
     - uses: actions/checkout@v1
