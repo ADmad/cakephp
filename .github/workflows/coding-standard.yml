@@ -12,17 +12,14 @@ jobs:
       with:
         fetch-depth: 10
         
-    - name: Setup PHP
-      run: |
-        sudo apt install php7.2-intl
-        sudo update-alternatives --set php /usr/bin/php7.2
-        sudo update-alternatives --set phar /usr/bin/phar7.2
-        sudo update-alternatives --set phar.phar /usr/bin/phar.phar7.2
-        sudo update-alternatives --set phpize /usr/bin/phpize7.2
-        sudo update-alternatives --set php-config /usr/bin/php-config7.2
+    - name: Installing PHP
+      uses: shivammathur/setup-php@master
+      with:
+        php-version: 7.2
+        extension-csv: mbstring, intl
         
     - name: composer install
       run: composer install
       
-    - name: Run phpcs
-      run: vendor/bin/phpcs --colors --parallel=16 -p src/ tests/
+    - name: Run PHP CodeSniffer
+      run: composer cs-check
