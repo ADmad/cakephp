@@ -10,7 +10,13 @@ jobs:
       matrix:
         php-version: ['7.2', '7.3']
         db-type: [sqlite, mysql]
-    name: Testsuite on PHP ${{matrix.php-version}} with ${{matrix.db-type}}
+    name: PHP ${{matrix.php-version}} with ${{matrix.db-type}}
+
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379/tcp
 
     steps:
     - uses: actions/checkout@v1
@@ -31,6 +37,7 @@ jobs:
 
         if [[ ${{matrix.php-version}} == '7.2' ]]; then sudo apt install php-pcov; fi
 
+        if [[ ${{matrix.db-type}} == 'sqlite' ]]; then export DB_DSN='sqlite:///:memory:'; fi
         if [[ ${{matrix.db-type}} == 'mysql' ]]; then export DB_DSN='mysql://root@127.0.0.1/cakephp_test?init[]=SET sql_mode = "STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"'; fi
 
     - name: composer install
