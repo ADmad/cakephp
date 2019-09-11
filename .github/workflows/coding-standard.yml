@@ -9,6 +9,8 @@ jobs:
     
     steps:
     - uses: actions/checkout@v1
+    - name: Setup PHP
+      run: sudo apt install php-intl
     - name: composer install
       run: composer install
     - name: Run phpcs
