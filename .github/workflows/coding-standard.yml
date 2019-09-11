@@ -12,6 +12,7 @@ jobs:
       with:
         fetch-depth: 10
         
+    - name: Setup PHP
       run: |
         sudo apt-remove php7.2-fpm
         sudo apt install php7.2-intl php7.2-mbstring
