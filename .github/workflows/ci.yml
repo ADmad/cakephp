@@ -1,11 +1,11 @@
 name: CakePHP CI
 
 on: [pull_request]
-runs-on: ubuntu-18.04
 
 jobs:
   coding-standard:
     name: Coding Standard
+    runs-on: ubuntu-18.04
 
     steps:
     - uses: actions/checkout@v1
@@ -24,6 +24,7 @@ jobs:
 
   static-analysis:
     name: Static Analysis
+    runs-on: ubuntu-18.04
 
     steps:
     - uses: actions/checkout@v1
