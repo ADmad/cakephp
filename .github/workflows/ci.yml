@@ -6,16 +6,17 @@ jobs:
   testsuite:
     runs-on: ubuntu-18.04
     strategy:
+      fail-fast: false
       matrix:
         php-versions: ['7.2', '7.3']
-    name: Testsuite on PHP ${{ matrix.php-versions }}
+    name: Testsuite on PHP ${{matrix.php-versions}}
 
     steps:
     - uses: actions/checkout@v1
       with:
         fetch-depth: 1
 
-    - name: Setup PHP
+    - name: Setup Environment
       run: |
         # Without removing php-fpm extensions installation fails for some reason
         sudo apt remove php7.2-fpm
@@ -25,11 +26,21 @@ jobs:
         sudo update-alternatives --set phar.phar /usr/bin/phar.phar7.2
         sudo phpdismod xdebug
 
+        sudo locale-gen da_DK
+
+        if [[ ${{matrix.php-versions}} == '7.2' ]]; then pecl install pcov; fi
+
     - name: composer install
       run: composer install
 
     - name: Run PHPUnit
-      run: vendor/bin/phpunit
+      run: |
+        if [[ ${{matrix.php-versions}} == '7.2' ]]; then
+          # Setting CODECOVERAGE is necessary to skip memory usage tests
+          CODECOVERAGE=1 vendor/bin/phpunit --coverage-clover=clover.xml
+        else
+          vendor/bin/phpunit
+        fi
 
   coding-standard:
     name: Coding Standard
