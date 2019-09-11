@@ -1,0 +1,15 @@
+name: Coding Standard
+
+on: [push, pull_request]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v1
+    - name: composer install
+      run: composer install
+    - name: Run phpcs
+      run: vendor/bin/phpcs --colors --parallel=16 -p src/ tests/
