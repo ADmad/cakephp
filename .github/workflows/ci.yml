@@ -8,8 +8,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-versions: ['7.2', '7.3']
-    name: Testsuite on PHP ${{matrix.php-versions}}
+        php-version: ['7.2', '7.3']
+        env: [sqlite, mysql]
+    name: Testsuite on PHP ${{matrix.php-version}}
 
     steps:
     - uses: actions/checkout@v1
@@ -19,23 +20,25 @@ jobs:
     - name: Setup Environment
       run: |
         # Without removing php-fpm extensions installation fails for some reason
-        sudo apt remove php${{matrix.php-versions}}-fpm
-        sudo apt install php${{matrix.php-versions}}-intl
-        sudo update-alternatives --set php /usr/bin/php${{matrix.php-versions}}
-        sudo update-alternatives --set phar /usr/bin/phar${{matrix.php-versions}}
-        sudo update-alternatives --set phar.phar /usr/bin/phar.phar${{matrix.php-versions}}
+        sudo apt remove php${{matrix.php-version}}-fpm
+        sudo apt install php${{matrix.php-version}}-intl
+        sudo update-alternatives --set php /usr/bin/php${{matrix.php-version}}
+        sudo update-alternatives --set phar /usr/bin/phar${{matrix.php-version}}
+        sudo update-alternatives --set phar.phar /usr/bin/phar.phar${{matrix.php-version}}
         sudo phpdismod xdebug
 
         sudo locale-gen da_DK
 
-        if [[ ${{matrix.php-versions}} == '7.2' ]]; then sudo apt install php-pcov; fi
+        if [[ ${{matrix.php-version}} == '7.2' ]]; then sudo apt install php-pcov; fi
+
+        if [[ ${{matrix.db-type}} == 'mysql' ]]; then export DB_DSN='mysql://root@127.0.0.1/cakephp_test?init[]=SET sql_mode = "STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"'; fi
 
     - name: composer install
       run: composer install
 
     - name: Run PHPUnit
       run: |
-        if [[ ${{matrix.php-versions}} == '7.2' ]]; then
+        if [[ ${{matrix.php-version}} == '7.2' ]]; then
           # Setting CODECOVERAGE is necessary to skip memory usage tests
           CODECOVERAGE=1 vendor/bin/phpunit --coverage-clover=clover.xml
         else
@@ -44,7 +47,7 @@ jobs:
 
     - name: Submit code coverage data
       run: |
-        if [[ ${{matrix.php-versions}} == '7.2' ]]; then
+        if [[ ${{matrix.php-version}} == '7.2' ]]; then
           wget https://github.com/php-coveralls/php-coveralls/releases/download/v2.1.0/php-coveralls.phar
           chmod +x php-coveralls.phar
           ./php-coveralls.phar
