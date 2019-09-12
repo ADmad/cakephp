@@ -17,6 +17,10 @@ jobs:
         image: redis
         ports:
           - 6379/tcp
+      memcached:
+        image: memcached
+        ports:
+          - 11211/tcp
 
     steps:
     - uses: actions/checkout@v1
@@ -40,8 +44,8 @@ jobs:
         if [[ ${{matrix.db-type}} == 'sqlite' ]]; then export DB_DSN='sqlite:///:memory:'; fi
         if [[ ${{matrix.db-type}} == 'mysql' ]]; then export DB_DSN='mysql://root@127.0.0.1/cakephp_test?init[]=SET sql_mode = "STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"'; fi
 
-        php -r "var_dump(class_exists('Redis'));"
-        php -r "var_dump(fsockopen('127.0.0.1', 6379));"
+        php -r "var_dump(fsockopen('127.0.0.1', ${{ job.services.redis.ports['6379'] }}));"
+        php -r "var_dump(fsockopen('127.0.0.1', ${{ job.services.memcached.ports['11211'] }}));"
 
     - name: composer install
       run: composer install
