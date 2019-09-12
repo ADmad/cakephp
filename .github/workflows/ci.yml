@@ -21,8 +21,8 @@ jobs:
         image: memcached
         ports:
           - 11211/tcp
-      postgresql:
-        image: postgresql
+      postgres:
+        image: postgres
         ports:
           - 5432/tcp
 
@@ -49,7 +49,7 @@ jobs:
       run: |
         if [[ ${{matrix.db-type}} == 'sqlite' ]]; then export DB_DSN='sqlite:///:memory:'; fi
         if [[ ${{matrix.db-type}} == 'mysql' ]]; then export DB_DSN='mysql://root@127.0.0.1/cakephp_test?init[]=SET sql_mode = "STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"'; fi
-        if [[ ${{matrix.db-type}} == 'postgres' ]]; then export DB_DSN='postgres://postgres@127.0.0.1:${{job.services.memcached.ports['5432']}}/cakephp_test'; fi
+        if [[ ${{matrix.db-type}} == 'postgres' ]]; then export DB_DSN='postgres://postgres@127.0.0.1:${{job.services.postgres.ports['5432']}}/cakephp_test'; fi
 
     - name: composer install
       run: composer install
