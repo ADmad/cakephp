@@ -88,13 +88,15 @@ class ConsoleInput
         set_error_handler(function (int $code, string $message) use (&$error) {
             $error = "stream_select failed with code={$code} message={$message}.";
         });
+        stream_set_blocking($this->_input, false);
         $readyFds = stream_select($readFds, $writeFds, $errorFds, $timeout);
         restore_error_handler();
         if ($error !== null) {
             throw new ConsoleException($error);
         }
+        debug($_SERVER);
         debug($readyFds);
-        var_dump($readyFds);
+        debug(stream_get_contents($this->_input, 100));
 
         return $readyFds > 0;
     }
