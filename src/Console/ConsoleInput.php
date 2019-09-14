@@ -93,6 +93,8 @@ class ConsoleInput
         if ($error !== null) {
             throw new ConsoleException($error);
         }
+        debug($readyFds);
+        var_dump($readyFds);
 
         return $readyFds > 0;
     }
