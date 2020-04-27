@@ -29,6 +29,8 @@ matrix:
   include:
     - php: 7.2
       env: PREFER_LOWEST=1 CODECOVERAGE=0
+    - php: 'nightly'
+      env: CODECOVERAGE=0
 
 before_install:
   - echo cakephp version && tail -1 VERSION.txt
@@ -42,12 +44,14 @@ before_install:
         pecl install pcov
       fi
 
-  - phpenv config-rm xdebug.ini
-
-  - echo 'extension = memcached.so' >> ~/.phpenv/versions/$(phpenv version-name)/etc/php.ini;
-  - echo 'extension = redis.so' >> ~/.phpenv/versions/$(phpenv version-name)/etc/php.ini
-  - echo 'extension = apcu.so' >> ~/.phpenv/versions/$(phpenv version-name)/etc/php.ini
-  - echo 'apc.enable_cli = 1' >> ~/.phpenv/versions/$(phpenv version-name)/etc/php.ini
+  - |
+      if [[ $TRAVIS_PHP_VERSION != 'nightly' ]]; then
+        phpenv config-rm xdebug.ini
+        echo 'extension = memcached.so' >> ~/.phpenv/versions/$(phpenv version-name)/etc/php.ini;
+        echo 'extension = redis.so' >> ~/.phpenv/versions/$(phpenv version-name)/etc/php.ini
+        echo 'extension = apcu.so' >> ~/.phpenv/versions/$(phpenv version-name)/etc/php.ini
+        echo 'apc.enable_cli = 1' >> ~/.phpenv/versions/$(phpenv version-name)/etc/php.ini
+      fi
 
   - sudo locale-gen da_DK.UTF-8
 
@@ -55,6 +59,8 @@ install:
   - |
       if [[ $CODECOVERAGE == 1 ]]; then
         composer install --prefer-dist --no-interaction
+      elif [[ $TRAVIS_PHP_VERSION != 'nightly' ]]; then
+        composer install --ignore-platform-deps
       else
         composer update --prefer-lowest --prefer-stable --no-interaction
       fi
