@@ -11,19 +11,20 @@ declare(strict_types=1);
  *
  * @copyright     Copyright (c) Cake Software Foundation, Inc. (https://cakefoundation.org)
  * @link          https://cakephp.org CakePHP(tm) Project
- * @since         3.0.0
+ * @since         4.1.0
  * @license       https://opensource.org/licenses/mit-license.php MIT License
  */
 namespace Cake\Test\TestCase\Database\Driver;
 
+use Cake\Database\Driver\Mariadb;
 use Cake\Datasource\ConnectionManager;
 use Cake\TestSuite\TestCase;
 use PDO;
 
 /**
- * Tests Mysql driver
+ * Tests Mariadb driver
  */
-class MysqlTest extends TestCase
+class MariadbTest extends TestCase
 {
     /**
      * setup
@@ -34,17 +35,17 @@ class MysqlTest extends TestCase
     {
         parent::setUp();
         $config = ConnectionManager::getConfig('test');
-        $this->skipIf(strpos($config['driver'], 'Mysql') === false, 'Not using Mysql for test config');
+        $this->skipIf(strpos($config['driver'], 'Mariadb') === false, 'Not using Mariadb for test config');
     }
 
     /**
-     * Test connecting to Mysql with default configuration
+     * Test connecting to Mariadb with default configuration
      *
      * @return void
      */
     public function testConnectionConfigDefault()
     {
-        $driver = $this->getMockBuilder('Cake\Database\Driver\Mysql')
+        $driver = $this->getMockBuilder(Mariadb::class)
             ->setMethods(['_connect', 'getConnection'])
             ->getMock();
         $dsn = 'mysql:host=localhost;port=3306;dbname=cake;charset=utf8mb4';
@@ -80,7 +81,7 @@ class MysqlTest extends TestCase
     }
 
     /**
-     * Test connecting to Mysql with custom configuration
+     * Test connecting to Mariadb with custom configuration
      *
      * @return void
      */
@@ -101,7 +102,7 @@ class MysqlTest extends TestCase
                 'this too',
             ],
         ];
-        $driver = $this->getMockBuilder('Cake\Database\Driver\Mysql')
+        $driver = $this->getMockBuilder(Mariadb::class)
             ->setMethods(['_connect', 'getConnection'])
             ->setConstructorArgs([$config])
             ->getMock();
