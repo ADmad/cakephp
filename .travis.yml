@@ -30,6 +30,8 @@ matrix:
       env: PREFER_LOWEST=1
     - php: nightly
       env: DB=sqlite DB_URL='sqlite:///:memory:'
+    - php: nightly
+      env: PHPCS=1
 
 before_install:
   - echo cakephp version && tail -1 VERSION.txt
@@ -66,7 +68,9 @@ install:
 
 script:
   - |
-      if [[ $TRAVIS_PHP_VERSION == '7.4' ]]; then
+      if [[ $PHPCS == 1 ]]; then
+        composer cs-check
+      elif [[ $TRAVIS_PHP_VERSION == '7.4' ]]; then
         export CODECOVERAGE=1 && vendor/bin/phpunit --verbose --coverage-clover=clover.xml
       else
         vendor/bin/phpunit
