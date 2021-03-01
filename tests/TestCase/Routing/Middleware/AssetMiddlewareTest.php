@@ -58,7 +58,7 @@ class AssetMiddlewareTest extends TestCase
         $modified = filemtime(TEST_APP . 'Plugin/TestPlugin/webroot/root.js');
         $request = ServerRequestFactory::fromGlobals([
             'REQUEST_URI' => '/test_plugin/root.js',
-            'HTTP_IF_MODIFIED_SINCE' => date('D, j M Y G:i:s \G\M\T', $modified),
+            'HTTP_IF_MODIFIED_SINCE' => date(DATE_RFC7231, $modified),
         ]);
         $handler = new TestRequestHandler();
         $middleware = new AssetMiddleware();
