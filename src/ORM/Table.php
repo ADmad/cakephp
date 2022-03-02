@@ -1731,7 +1731,6 @@ class Table implements RepositoryInterface, EventListenerInterface, EventDispatc
             ->set($fields)
             ->where($conditions)
             ->execute();
-        $statement->closeCursor();
 
         return $statement->rowCount();
     }
@@ -1756,7 +1755,6 @@ class Table implements RepositoryInterface, EventListenerInterface, EventDispatc
             ->delete()
             ->where($conditions)
             ->execute();
-        $statement->closeCursor();
 
         return $statement->rowCount();
     }
@@ -2107,7 +2105,6 @@ class Table implements RepositoryInterface, EventListenerInterface, EventDispatc
                 }
             }
         }
-        $statement->closeCursor();
 
         return $success;
     }
@@ -2175,7 +2172,6 @@ class Table implements RepositoryInterface, EventListenerInterface, EventDispatc
             ->execute();
 
         $success = $statement->errorCode() === '00000' ? $entity : false;
-        $statement->closeCursor();
 
         return $success;
     }
