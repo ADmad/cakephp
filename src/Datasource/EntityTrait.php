@@ -17,11 +17,15 @@ declare(strict_types=1);
 namespace Cake\Datasource;
 
 use Cake\Collection\Collection;
+use Cake\Core\Exception\CakeException;
 use Cake\Datasource\Exception\MissingPropertyException;
 use Cake\ORM\Entity;
 use Cake\Utility\Hash;
 use Cake\Utility\Inflector;
 use InvalidArgumentException;
+use PropertyHookType;
+use ReflectionMethod;
+use ReflectionProperty;
 
 /**
  * An entity represents a single result row from a repository. It exposes the
@@ -283,10 +287,18 @@ trait EntityTrait
 
             $this->setDirty($name, true);
 
+            $hasHook = false;
+            $originalValue = $this->_fields[$name] ?? null;
+
             if ($options['setter']) {
                 $setter = static::_accessor($name, 'set');
                 if ($setter) {
                     $value = $this->{$setter}($value);
+                }
+
+                $hasHook = $this->hasHook($name, PropertyHookType::Set);
+                if ($hasHook) {
+                    $this->{$name} = $value;
                 }
             }
 
@@ -294,12 +306,14 @@ trait EntityTrait
                 $this->isOriginalField($name) &&
                 !array_key_exists($name, $this->_original) &&
                 array_key_exists($name, $this->_fields) &&
-                $value !== $this->_fields[$name]
+                $value !== $originalValue
             ) {
-                $this->_original[$name] = $this->_fields[$name];
+                $this->_original[$name] = $originalValue;
             }
 
-            $this->_fields[$name] = $value;
+            if (!$hasHook) {
+                $this->_fields[$name] = $value;
+            }
         }
 
         return $this;
@@ -329,6 +343,14 @@ trait EntityTrait
         if ($method) {
             // Must be variable before returning: Only variable references should be returned by reference.
             $result = $this->{$method}($value);
+
+            return $result;
+        }
+
+        $hasHook = $this->hasHook($field, PropertyHookType::Get);
+        if ($hasHook) {
+            // Must be variable before returning: Only variable references should be returned by reference.
+            $result = $this->{$field};
 
             return $result;
         }
@@ -732,6 +754,42 @@ trait EntityTrait
         }
 
         return static::$_accessors[$class][$type][$property];
+    }
+
+    protected static function hasHook(string $property, PropertyHookType $type): ?bool
+    {
+        $class = static::class;
+
+        if (isset(static::$_accessors[$class][$property])) {
+            return static::$_accessors[$class][$property][$type->value] ?? null;
+        }
+
+        if (static::class === Entity::class) {
+            return null;
+        }
+
+        if (property_exists($class, $property)) {
+            $reflectionProp = new ReflectionProperty($class, $property);
+
+            if (!$reflectionProp->isVirtual()) {
+                throw new CakeException(sprintf(
+                    'Property `%s` in class `%s` is not virtual',
+                    $property,
+                    $class
+                ));
+            }
+
+            static::$_accessors[$class][$property] = array_intersect_key(
+                ['get' => true, 'set' => true],
+                $reflectionProp->getHooks()
+            );
+
+            return static::$_accessors[$class][$property][$type->value] ?? null;
+        }
+
+        static::$_accessors[$class][$property] = [];
+
+        return null;
     }
 
     /**
