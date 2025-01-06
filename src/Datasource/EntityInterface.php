@@ -154,14 +154,14 @@ interface EntityInterface extends ArrayAccess, JsonSerializable, Stringable
      * mark it as protected.
      * @return $this
      */
-    public function setPatchable(array|string $field, bool $set);
+    public function setAccess(array|string $field, bool $set);
 
     /**
      * Patchable configuration for this entity.
      *
      * @return array<bool>
      */
-    public function getPatchable(): array;
+    public function getAccessible(): array;
 
     /**
      * Checks if a field can be patched
@@ -169,7 +169,7 @@ interface EntityInterface extends ArrayAccess, JsonSerializable, Stringable
      * @param string $field Field name to check
      * @return bool
      */
-    public function isPatchable(string $field): bool;
+    public function isAccessible(string $field): bool;
 
     /**
      * Sets the source alias

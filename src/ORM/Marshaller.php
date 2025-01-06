@@ -196,7 +196,7 @@ class Marshaller
 
         if (isset($options['patchableFields'])) {
             foreach ((array)$options['patchableFields'] as $key => $value) {
-                $entity->setPatchable($key, $value);
+                $entity->setAccess($key, $value);
             }
         }
         $errors = $this->_validate($data, $options['validate'], true);
@@ -564,7 +564,7 @@ class Marshaller
 
         if (isset($options['patchableFields'])) {
             foreach ((array)$options['patchableFields'] as $key => $value) {
-                $entity->setPatchable($key, $value);
+                $entity->setAccess($key, $value);
             }
         }
 
@@ -842,7 +842,7 @@ class Marshaller
         $extra = [];
         foreach ($original as $entity) {
             // Mark joinData as patchable so we can marshal it properly.
-            $entity->setPatchable('_joinData', true);
+            $entity->setAccess('_joinData', true);
 
             $joinData = $entity->get('_joinData');
             if ($joinData instanceof EntityInterface) {

@@ -14,29 +14,31 @@ declare(strict_types=1);
  * @since         3.0.0
  * @license       https://opensource.org/licenses/mit-license.php MIT License
  */
-namespace Cake\Test\TestCase\ORM;
+namespace Cake\Test\TestCase\Datasource;
 
+use Cake\Datasource\EntityNew;
 use Cake\Datasource\Exception\MissingPropertyException;
-use Cake\ORM\Entity;
 use Cake\TestSuite\TestCase;
 use Exception;
 use InvalidArgumentException;
+use Mockery;
 use stdClass;
-use TestApp\Model\Entity\Extending;
-use TestApp\Model\Entity\NonExtending;
-use TestApp\Model\Entity\VirtualUser;
+use TestApp\Model\Entity\UserProps;
 
 /**
  * Entity test case.
  */
-class EntityTest extends TestCase
+class EntityNewTest extends TestCase
 {
     /**
      * Tests setting a single property in an entity without custom setters
      */
     public function testSetOneParamNoSetters(): void
     {
-        $entity = new Entity();
+        $entity = new class extends EntityNew {
+            protected $id;
+            protected $foo;
+        };
 
         $this->assertNull($entity->getOriginal('foo'));
         $entity->set('foo', 'bar', ['asOriginal' => true]);
@@ -58,7 +60,11 @@ class EntityTest extends TestCase
      */
     public function testSetMultiplePropertiesNoSetters(): void
     {
-        $entity = new Entity();
+        $entity = new class extends EntityNew {
+            protected $id;
+            protected $foo;
+            protected $thing;
+        };
         $entity->setAccess('*', true);
 
         $entity->set(['foo' => 'bar', 'id' => 1], ['asOriginal' => true]);
@@ -71,13 +77,6 @@ class EntityTest extends TestCase
         $this->assertSame(3, $entity->thing);
         $this->assertSame('bar', $entity->getOriginal('foo'));
         $this->assertSame(1, $entity->getOriginal('id'));
-
-        $entity->set(['foo', 'bar']);
-        $this->assertSame('foo', $entity->get('0'));
-        $this->assertSame('bar', $entity->get('1'));
-
-        $entity->set(['sample']);
-        $this->assertSame('sample', $entity->get('0'));
     }
 
     /**
@@ -85,10 +84,16 @@ class EntityTest extends TestCase
      */
     public function testGetOriginal(): void
     {
-        $entity = new Entity(
+        $entity = new class (
             ['false' => false, 'null' => null, 'zero' => 0, 'empty' => ''],
             ['markNew' => true],
-        );
+        ) extends EntityNew  {
+            protected $false;
+            protected $null;
+            protected $zero;
+            protected $empty;
+        };
+
         $this->assertNull($entity->getOriginal('null'));
         $this->assertFalse($entity->getOriginal('false'));
         $this->assertSame(0, $entity->getOriginal('zero'));
@@ -107,10 +112,13 @@ class EntityTest extends TestCase
      */
     public function testGetOriginalFallback(): void
     {
-        $entity = new Entity(
+        $entity = new class (
             ['foo' => 'foo', 'bar' => 'bar'],
             ['markNew' => true],
-        );
+        ) extends EntityNew  {
+            protected $foo;
+            protected $bar;
+        };
         $this->assertNull($entity->getOriginal('baz', true));
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Cannot retrieve original value for field `baz`');
@@ -122,12 +130,20 @@ class EntityTest extends TestCase
      */
     public function testExtractOriginal(): void
     {
-        $entity = new Entity([
-            'id' => 1,
-            'title' => 'original',
-            'body' => 'no',
-            'null' => null,
-        ], ['markNew' => true]);
+        $entity = new class (
+            [
+                'id' => 1,
+                'title' => 'original',
+                'body' => 'no',
+                'null' => null,
+            ],
+            ['markNew' => true]
+        ) extends EntityNew {
+            protected $id;
+            protected $title;
+            protected $body;
+            protected $null;
+        };
         $entity->set('body', 'updated body');
         $result = $entity->extractOriginal(['id', 'title', 'body', 'null', 'undefined']);
         $expected = [
@@ -158,12 +174,20 @@ class EntityTest extends TestCase
      */
     public function testExtractOriginalValues(): void
     {
-        $entity = new Entity([
-            'id' => 1,
-            'title' => 'original',
-            'body' => 'no',
-            'null' => null,
-        ], ['markNew' => true]);
+        $entity = new class (
+            [
+                'id' => 1,
+                'title' => 'original',
+                'body' => 'no',
+                'null' => null,
+            ],
+            ['markNew' => true]
+        ) extends EntityNew {
+            protected $id;
+            protected $title;
+            protected $body;
+            protected $null;
+        };
         $entity->set('body', 'updated body');
         $result = $entity->getOriginalValues();
         $expected = [
@@ -180,10 +204,11 @@ class EntityTest extends TestCase
      */
     public function testSetOneParamWithSetter(): void
     {
-        $entity = new class extends Entity {
-            protected function _setName(?string $name): string
-            {
-                return 'Dr. ' . $name;
+        $entity = new class extends EntityNew {
+            protected ?string $name {
+                set (?string $name) {
+                    $this->name = 'Dr. ' . $name;
+                }
             }
         };
         $entity->set('name', 'Jones');
@@ -195,17 +220,20 @@ class EntityTest extends TestCase
      */
     public function testMultipleWithSetter(): void
     {
-        $entity = new class extends Entity {
-            protected function _setName(?string $name): string
-            {
-                return 'Dr. ' . $name;
+        $entity = new class extends EntityNew {
+            protected ?string $name {
+                set (?string $name) {
+                    $this->name = 'Dr. ' . $name;
+                }
             }
 
-            protected function _setStuff(?array $stuff): array
-            {
-                return ['c', 'd'];
+            protected ?array $stuff {
+                set (?array $stuff) {
+                    $this->stuff = ['c', 'd'];
+                }
             }
         };
+
         $entity->setAccess('*', true);
         $entity->set(['name' => 'Jones', 'stuff' => ['a', 'b']]);
         $this->assertSame('Dr. Jones', $entity->name);
@@ -213,39 +241,11 @@ class EntityTest extends TestCase
     }
 
     /**
-     * Tests that it is possible to bypass the setters
-     */
-    public function testBypassSetters(): void
-    {
-        $entity = new class extends Entity {
-            protected function _setName(?string $name): string
-            {
-                throw new Exception('_setName should not have been called');
-            }
-
-            protected function _setStuff(?array $stuff): array
-            {
-                throw new Exception('_setStuff should not have been called');
-            }
-        };
-        $entity->setAccess('*', true);
-
-        $entity->set('name', 'Jones', ['setter' => false]);
-        $this->assertSame('Jones', $entity->name);
-
-        $entity->set('stuff', 'Thing', ['setter' => false]);
-        $this->assertSame('Thing', $entity->stuff);
-
-        $entity->set(['name' => 'foo', 'stuff' => 'bar'], ['setter' => false]);
-        $this->assertSame('bar', $entity->stuff);
-    }
-
-    /**
      * Tests that the constructor will set initial properties
      */
     public function testConstructor(): void
     {
-        $entity = $this->getMockBuilder(Entity::class)
+        $entity = $this->getMockBuilder(EntityNew::class)
             ->onlyMethods(['set'])
             ->disableOriginalConstructor()
             ->getMock();
@@ -254,14 +254,14 @@ class EntityTest extends TestCase
             ->with(
                 ...self::withConsecutive(
                     [
-                    ['a' => 'b', 'c' => 'd'], ['setter' => true, 'guard' => false],
+                    ['a' => 'b', 'c' => 'd'], ['guard' => false, 'setter' => true],
                     ],
-                    [['foo' => 'bar'], ['setter' => false, 'guard' => false]],
+                    [['foo' => 'bar'], ['guard' => false, 'setter' => true]],
                 ),
             );
 
         $entity->__construct(['a' => 'b', 'c' => 'd']);
-        $entity->__construct(['foo' => 'bar'], ['useSetters' => false]);
+        $entity->__construct(['foo' => 'bar']);
     }
 
     /**
@@ -270,13 +270,13 @@ class EntityTest extends TestCase
      */
     public function testConstructorWithGuard(): void
     {
-        $entity = $this->getMockBuilder(Entity::class)
+        $entity = $this->getMockBuilder(EntityNew::class)
             ->onlyMethods(['set'])
             ->disableOriginalConstructor()
             ->getMock();
         $entity->expects($this->once())
             ->method('set')
-            ->with(['foo' => 'bar'], ['setter' => true, 'guard' => true]);
+            ->with(['foo' => 'bar'], ['guard' => true, 'setter' => true]);
         $entity->__construct(['foo' => 'bar'], ['guard' => true]);
     }
 
@@ -285,7 +285,10 @@ class EntityTest extends TestCase
      */
     public function testGetNoGetters(): void
     {
-        $entity = new Entity(['id' => 1, 'foo' => 'bar']);
+        $entity = new class (['id' => 1, 'foo' => 'bar']) extends EntityNew {
+            protected $id;
+            protected $foo;
+        };
         $this->assertSame(1, $entity->get('id'));
         $this->assertSame('bar', $entity->get('foo'));
     }
@@ -293,20 +296,32 @@ class EntityTest extends TestCase
     public function testRequirePresenceException(): void
     {
         $this->expectException(MissingPropertyException::class);
-        $this->expectExceptionMessage('Property `not_present` does not exist for the entity `Cake\ORM\Entity`');
+        $this->expectExceptionMessage('Property `not_present` does not exist for the entity `Cake\Datasource\EntityNew`');
 
-        $entity = new Entity();
+        $entity = new EntityNew();
         $entity->requireFieldPresence();
         $entity->get('not_present');
     }
 
     public function testRequirePresenceNoException(): void
     {
-        $entity = new Entity(['is_present' => null]);
+        $entity = new class (['is_present' => null]) extends EntityNew {
+            protected ?bool $is_present;
+            protected string $bonus;
+        };
         $entity->requireFieldPresence();
         $this->assertNull($entity->get('is_present'));
 
-        $entity = new VirtualUser();
+        $entity = new class extends EntityNew
+        {
+            protected array $_virtual = [
+                'bonus',
+            ];
+
+            protected $bonus {
+                get => 'bonus';
+            }
+        };
         $entity->requireFieldPresence();
         $this->assertSame('bonus', $entity->get('bonus'));
     }
@@ -316,14 +331,12 @@ class EntityTest extends TestCase
      */
     public function testGetCustomGetters(): void
     {
-        $entity = new class extends Entity {
-            protected function _getName(string $name): string
-            {
-                return 'Dr. ' . $name;
+        $entity = new class extends EntityNew {
+            protected $name {
+                get => 'Dr. ' . $this->name;
             }
         };
         $entity->set('name', 'Jones');
-        $this->assertSame('Dr. Jones', $entity->get('name'));
         $this->assertSame('Dr. Jones', $entity->get('name'));
     }
 
@@ -332,18 +345,15 @@ class EntityTest extends TestCase
      */
     public function testGetCustomGettersAfterSet(): void
     {
-        $entity = new class extends Entity {
-            protected function _getName(string $name): string
-            {
-                return 'Dr. ' . $name;
+        $entity = new class extends EntityNew {
+            protected $name {
+                get => 'Dr. ' . $this->name;
             }
         };
         $entity->set('name', 'Jones');
         $this->assertSame('Dr. Jones', $entity->get('name'));
-        $this->assertSame('Dr. Jones', $entity->get('name'));
 
         $entity->set('name', 'Mark');
-        $this->assertSame('Dr. Mark', $entity->get('name'));
         $this->assertSame('Dr. Mark', $entity->get('name'));
     }
 
@@ -352,10 +362,9 @@ class EntityTest extends TestCase
      */
     public function testGetCacheClearedByUnset(): void
     {
-        $entity = new class extends Entity {
-            protected function _getName(?string $name): string
-            {
-                return 'Dr. ' . $name;
+        $entity = new class extends EntityNew {
+            protected ?string $name {
+                get => 'Dr. ' . $this->name;
             }
         };
         $entity->set('name', 'Jones');
@@ -370,15 +379,13 @@ class EntityTest extends TestCase
      */
     public function testGetCamelCasedProperties(): void
     {
-        $entity = new class extends Entity {
-            protected function _getListIdName(): string
-            {
-                return 'A name';
+        $entity = new class extends EntityNew {
+            protected $list_id_name {
+                get => 'A name';
             }
         };
-        $entity->setVirtual(['ListIdName']);
-        $this->assertSame('A name', $entity->list_id_name, 'underscored virtual field should be accessible');
-        $this->assertSame('A name', $entity->listIdName, 'Camelbacked virtual field should be accessible');
+        $entity->setVirtual(['list_id_name']);
+        $this->assertSame('A name', $entity->list_id_name);
     }
 
     /**
@@ -386,7 +393,9 @@ class EntityTest extends TestCase
      */
     public function testMagicSet(): void
     {
-        $entity = new Entity();
+        $entity = new class extends EntityNew {
+            protected $name;
+        };
         $entity->name = 'Jones';
         $this->assertSame('Jones', $entity->name);
         $entity->name = 'George';
@@ -398,10 +407,11 @@ class EntityTest extends TestCase
      */
     public function testMagicSetWithSetter(): void
     {
-        $entity = new class extends Entity {
-            protected function _setName(?string $name): string
-            {
-                return 'Dr. ' . $name;
+        $entity = new class extends EntityNew {
+            protected ?string $name {
+                set (?string $name) {
+                    $this->name = 'Dr. ' . $name;
+                }
             }
         };
         $entity->name = 'Jones';
@@ -413,10 +423,11 @@ class EntityTest extends TestCase
      */
     public function testMagicSetWithSetterTitleCase(): void
     {
-        $entity = new class extends Entity {
-            protected function _setName(?string $name): string
-            {
-                return 'Dr. ' . $name;
+        $entity = new class extends EntityNew {
+            protected ?string $Name {
+                set (?string $name) {
+                    $this->Name = 'Dr. ' . $name;
+                }
             }
         };
         $entity->Name = 'Jones';
@@ -428,10 +439,9 @@ class EntityTest extends TestCase
      */
     public function testMagicGetWithGetter(): void
     {
-        $entity = new class extends Entity {
-            protected function _getName(string $name): string
-            {
-                return 'Dr. ' . $name;
+        $entity = new class extends EntityNew {
+            protected $name {
+                get => 'Dr. ' . $this->name;
             }
         };
         $entity->set('name', 'Jones');
@@ -443,10 +453,9 @@ class EntityTest extends TestCase
      */
     public function testMagicGetWithGetterTitleCase(): void
     {
-        $entity = new class extends Entity {
-            protected function _getName(string $name): string
-            {
-                return 'Dr. ' . $name;
+        $entity = new class extends EntityNew {
+            protected $Name {
+                get => 'Dr. ' . $this->Name;
             }
         };
         $entity->set('Name', 'Jones');
@@ -456,11 +465,16 @@ class EntityTest extends TestCase
     /**
      * Test indirectly modifying internal properties
      */
-    public function testIndirectModification(): void
+    public function testIndirectModificationFailure(): void
     {
-        $entity = new Entity();
+        $entity = new class extends EntityNew {
+            protected $things;
+        };
         $entity->things = ['a', 'b'];
         $entity->things[] = 'c';
+        $this->assertEquals(['a', 'b'], $entity->things);
+
+        $entity->things = array_merge($entity->things, ['c']);
         $this->assertEquals(['a', 'b', 'c'], $entity->things);
     }
 
@@ -469,7 +483,11 @@ class EntityTest extends TestCase
      */
     public function testHas(): void
     {
-        $entity = new Entity(['id' => 1, 'name' => 'Juan', 'foo' => null]);
+        $entity = new class (['id' => 1, 'name' => 'Juan', 'foo' => null]) extends EntityNew {
+            protected $id;
+            protected $name;
+            protected $foo;
+        };
         $this->assertTrue($entity->has('id'));
         $this->assertTrue($entity->has('name'));
         $this->assertTrue($entity->has('foo'));
@@ -480,10 +498,11 @@ class EntityTest extends TestCase
         $this->assertTrue($entity->has(['id', 'foo']));
         $this->assertFalse($entity->has(['id', 'nope']));
 
-        $entity = new class extends Entity {
-            protected function _getThings(): never
-            {
-                throw new Exception('_getThings() should not have been called');
+        $entity = new class extends EntityNew {
+            protected $things {
+                get {
+                    throw new Exception('$things::get() should not have been called');
+                }
             }
         };
         $this->assertTrue($entity->has('things'));
@@ -494,12 +513,17 @@ class EntityTest extends TestCase
      */
     public function testUnset(): void
     {
-        $entity = new Entity(['id' => 1, 'name' => 'bar']);
+        $entity = new class (['id' => 1, 'name' => 'bar']) extends EntityNew {
+            protected $id;
+            protected $name;
+        };
         $entity->unset('id');
         $this->assertFalse($entity->has('id'));
         $this->assertTrue($entity->has('name'));
         $entity->unset('name');
         $this->assertFalse($entity->has('id'));
+
+        $this->assertSame([], $entity->toArray());
     }
 
     /**
@@ -507,7 +531,10 @@ class EntityTest extends TestCase
      */
     public function testUnsetMakesClean(): void
     {
-        $entity = new Entity(['id' => 1, 'name' => 'bar']);
+        $entity = new class (['id' => 1, 'name' => 'bar']) extends EntityNew {
+            protected $id;
+            protected $name;
+        };
         $this->assertTrue($entity->isDirty('name'));
         $entity->unset('name');
         $this->assertFalse($entity->isDirty('name'), 'Removed properties are not dirty.');
@@ -518,7 +545,11 @@ class EntityTest extends TestCase
      */
     public function testUnsetMultiple(): void
     {
-        $entity = new Entity(['id' => 1, 'name' => 'bar', 'thing' => 2]);
+        $entity = new class (['id' => 1, 'name' => 'bar', 'thing' => 2]) extends EntityNew {
+            protected $id;
+            protected $name;
+            protected $thing;
+        };
         $entity->unset(['id', 'thing']);
         $this->assertFalse($entity->has('id'));
         $this->assertTrue($entity->has('name'));
@@ -530,7 +561,11 @@ class EntityTest extends TestCase
      */
     public function testMagicIsset(): void
     {
-        $entity = new Entity(['id' => 1, 'name' => 'Juan', 'foo' => null]);
+        $entity = new class (['id' => 1, 'name' => 'Juan', 'foo' => null]) extends EntityNew {
+            protected $id;
+            protected $name;
+            protected $foo;
+        };
         $this->assertTrue(isset($entity->id));
         $this->assertTrue(isset($entity->name));
         $this->assertFalse(isset($entity->foo));
@@ -542,7 +577,7 @@ class EntityTest extends TestCase
      */
     public function testMagicUnset(): void
     {
-        $entity = $this->getMockBuilder(Entity::class)
+        $entity = $this->getMockBuilder(EntityNew::class)
             ->onlyMethods(['unset'])
             ->getMock();
         $entity->expects($this->once())
@@ -554,9 +589,13 @@ class EntityTest extends TestCase
     /**
      * Tests isset with array access
      */
-    public function testIssetArrayAccess(): void
+    public function testIssetArrayPatchable(): void
     {
-        $entity = new Entity(['id' => 1, 'name' => 'Juan', 'foo' => null]);
+        $entity = new class (['id' => 1, 'name' => 'Juan', 'foo' => null]) extends EntityNew {
+            protected $id;
+            protected $name;
+            protected $foo;
+        };
         $this->assertArrayHasKey('id', $entity);
         $this->assertArrayHasKey('name', $entity);
         $this->assertArrayNotHasKey('foo', $entity);
@@ -566,9 +605,9 @@ class EntityTest extends TestCase
     /**
      * Tests get property with array access
      */
-    public function testGetArrayAccess(): void
+    public function testGetArrayPatchable(): void
     {
-        $entity = $this->getMockBuilder(Entity::class)
+        $entity = $this->getMockBuilder(EntityNew::class)
             ->onlyMethods(['get'])
             ->getMock();
         $entity->expects($this->exactly(2))
@@ -585,9 +624,9 @@ class EntityTest extends TestCase
     /**
      * Tests set with array access
      */
-    public function testSetArrayAccess(): void
+    public function testSetArrayPatchable(): void
     {
-        $entity = $this->getMockBuilder(Entity::class)
+        $entity = $this->getMockBuilder(EntityNew::class)
             ->onlyMethods(['set'])
             ->getMock();
         $entity->setAccess('*', true);
@@ -606,10 +645,10 @@ class EntityTest extends TestCase
     /**
      * Tests unset with array access
      */
-    public function testUnsetArrayAccess(): void
+    public function testUnsetArrayPatchable(): void
     {
         /** @var \Cake\ORM\Entity|\PHPUnit\Framework\MockObject\MockObject $entity */
-        $entity = $this->getMockBuilder(Entity::class)
+        $entity = $this->getMockBuilder(EntityNew::class)
             ->onlyMethods(['unset'])
             ->getMock();
         $entity->expects($this->once())
@@ -619,64 +658,12 @@ class EntityTest extends TestCase
     }
 
     /**
-     * Tests that the method cache will only report the methods for the called class,
-     * this is, calling methods defined in another entity will not cause a fatal error
-     * when trying to call directly an inexistent method in another class
-     */
-    public function testMethodCache(): void
-    {
-        $entity = new class extends Entity {
-            protected function _setFoo(?string $name): string
-            {
-                return 'Dr. ' . $name;
-            }
-
-            protected function _getBar(string $bar): string
-            {
-                return 'Dir. ' . $bar;
-            }
-        };
-        $entity2 = new class extends Entity {
-            protected function _setBar(?string $name): string
-            {
-                return 'DrDr. ' . $name;
-            }
-        };
-
-        $entity = $entity->set('foo', 'Someone');
-        $this->assertEquals('Dr. Someone', $entity->get('foo'));
-        $entity2 = $entity2->set('bar', 'Someone');
-        $this->assertEquals('DrDr. Someone', $entity2->get('bar'));
-    }
-
-    /**
-     * Tests that long properties in the entity are inflected correctly
-     */
-    public function testSetGetLongPropertyNames(): void
-    {
-        $entity = new class extends Entity {
-            protected function _setVeryLongProperty(?string $name): string
-            {
-                return 'Dr. ' . $name;
-            }
-
-            protected function _getVeryLongProperty(?string $veryLongProperty): string
-            {
-                return 'Dir. ' . $veryLongProperty;
-            }
-        };
-        $this->assertEquals('Dir. ', $entity->get('very_long_property'));
-        $entity->set('very_long_property', 'Someone');
-        $this->assertEquals('Dir. Dr. Someone', $entity->get('very_long_property'));
-    }
-
-    /**
      * Tests serializing an entity as JSON
      */
     public function testJsonSerialize(): void
     {
         $data = ['name' => 'James', 'age' => 20, 'phones' => ['123', '457']];
-        $entity = new Entity($data);
+        $entity = new UserProps($data);
         $this->assertEquals(json_encode($data), json_encode($entity));
     }
 
@@ -686,9 +673,9 @@ class EntityTest extends TestCase
     public function testPhpSerialize(): void
     {
         $data = ['name' => 'James', 'age' => 20, 'phones' => ['123', '457']];
-        $entity = new Entity($data);
+        $entity = new UserProps($data);
         $copy = unserialize(serialize($entity));
-        $this->assertInstanceOf(Entity::class, $copy);
+        $this->assertInstanceOf(EntityNew::class, $copy);
         $this->assertEquals($data, $copy->toArray());
     }
 
@@ -697,12 +684,16 @@ class EntityTest extends TestCase
      */
     public function testJsonSerializeRecursive(): void
     {
-        $phone = $this->getMockBuilder(Entity::class)
+        $phone = $this->getMockBuilder(EntityNew::class)
             ->onlyMethods(['jsonSerialize'])
             ->getMock();
         $phone->expects($this->once())->method('jsonSerialize')->willReturn(['something']);
         $data = ['name' => 'James', 'age' => 20, 'phone' => $phone];
-        $entity = new Entity($data);
+        $entity = new class ($data) extends EntityNew {
+            protected $name;
+            protected $age;
+            protected $phone;
+        };
         $expected = ['name' => 'James', 'age' => 20, 'phone' => ['something']];
         $this->assertEquals(json_encode($expected), json_encode($entity));
     }
@@ -712,11 +703,15 @@ class EntityTest extends TestCase
      */
     public function testExtract(): void
     {
-        $entity = new Entity([
+        $entity = new class ([
             'id' => 1,
             'title' => 'Foo',
             'author_id' => 3,
-        ]);
+        ]) extends EntityNew {
+            protected $id;
+            protected $title;
+            protected $author_id;
+        };
         $expected = ['author_id' => 3, 'title' => 'Foo',];
         $this->assertEquals($expected, $entity->extract(['author_id', 'title']));
 
@@ -735,11 +730,15 @@ class EntityTest extends TestCase
      */
     public function testIsDirty(): void
     {
-        $entity = new Entity([
+        $entity = new class ([
             'id' => 1,
             'title' => 'Foo',
             'author_id' => 3,
-        ]);
+        ]) extends EntityNew {
+            protected $id;
+            protected $title;
+            protected $author_id;
+        };
         $this->assertTrue($entity->isDirty('id'));
         $this->assertTrue($entity->isDirty('title'));
         $this->assertTrue($entity->isDirty('author_id'));
@@ -756,6 +755,19 @@ class EntityTest extends TestCase
 
         $entity->setDirty('author_id', false);
         $this->assertFalse($entity->isDirty(), 'all fields are clean.');
+
+        $entity2 = new class ([
+            'id' => 1,
+            'title' => 'Foo',
+        ], ['markClean' => true]) extends EntityNew {
+            protected $id;
+            protected $title;
+        };
+        $this->assertFalse($entity2->isDirty());
+        $this->assertFalse($entity2->isDirty('title'));
+
+        $entity2->title = 'bar';
+        $this->assertTrue($entity2->isDirty('title'));
     }
 
     /**
@@ -763,11 +775,15 @@ class EntityTest extends TestCase
      */
     public function testSetDirty(): void
     {
-        $entity = new Entity([
+        $entity = new class ([
             'id' => 1,
             'title' => 'Foo',
             'author_id' => 3,
-        ], ['markClean' => true]);
+        ], ['markClean' => true]) extends EntityNew {
+            protected $id;
+            protected $title;
+            protected $author_id;
+        };
 
         $this->assertFalse($entity->isDirty());
         $this->assertSame($entity, $entity->setDirty('title'));
@@ -783,9 +799,10 @@ class EntityTest extends TestCase
      */
     public function testDirtyChangingProperties(): void
     {
-        $entity = new Entity([
-            'title' => 'Foo',
-        ]);
+        $entity = new class (['title' => 'Foo']) extends EntityNew {
+            protected $title;
+            protected $something;
+        };
 
         $entity->setDirty('title', false);
         $this->assertFalse($entity->isDirty('title'));
@@ -805,11 +822,15 @@ class EntityTest extends TestCase
      */
     public function testExtractDirty(): void
     {
-        $entity = new Entity([
+        $entity = new class ([
             'id' => 1,
             'title' => 'Foo',
             'author_id' => 3,
-        ]);
+        ]) extends EntityNew {
+            protected $id;
+            protected $title;
+            protected $author_id;
+        };
         $entity->setDirty('id', false);
         $entity->setDirty('title', false);
         $expected = ['author_id' => 3];
@@ -822,11 +843,15 @@ class EntityTest extends TestCase
      */
     public function testGetDirty(): void
     {
-        $entity = new Entity([
+        $entity = new class ([
             'id' => 1,
             'title' => 'Foo',
             'author_id' => 3,
-        ]);
+        ]) extends EntityNew {
+            protected $id;
+            protected $title;
+            protected $author_id;
+        };
 
         $expected = [
             'id',
@@ -841,11 +866,15 @@ class EntityTest extends TestCase
      */
     public function testClean(): void
     {
-        $entity = new Entity([
+        $entity = new class ([
             'id' => 1,
             'title' => 'Foo',
             'author_id' => 3,
-        ]);
+        ]) extends EntityNew {
+            protected $id;
+            protected $title;
+            protected $author_id;
+        };
         $this->assertTrue($entity->isDirty('id'));
         $this->assertTrue($entity->isDirty('title'));
         $this->assertTrue($entity->isDirty('author_id'));
@@ -861,12 +890,15 @@ class EntityTest extends TestCase
      */
     public function testIsNew(): void
     {
-        $data = [
+        $entity = new class ([
             'id' => 1,
             'title' => 'Foo',
             'author_id' => 3,
-        ];
-        $entity = new Entity($data);
+        ]) extends EntityNew {
+            protected $id;
+            protected $title;
+            protected $author_id;
+        };
         $this->assertTrue($entity->isNew());
 
         $entity->setNew(true);
@@ -881,19 +913,23 @@ class EntityTest extends TestCase
      */
     public function testConstructorWithClean(): void
     {
-        $entity = $this->getMockBuilder(Entity::class)
-            ->onlyMethods(['clean'])
-            ->disableOriginalConstructor()
-            ->getMock();
-        $entity->expects($this->never())->method('clean');
-        $entity->__construct(['a' => 'b', 'c' => 'd']);
+        $this->expectNotToPerformAssertions();
 
-        $entity = $this->getMockBuilder(Entity::class)
-            ->onlyMethods(['clean'])
-            ->disableOriginalConstructor()
-            ->getMock();
-        $entity->expects($this->once())->method('clean');
-        $entity->__construct(['a' => 'b', 'c' => 'd'], ['markClean' => true]);
+        $mock = Mockery::mock(EntityNew::class)->makePartial();
+        $mock->shouldReceive('clean')->never();
+        $mock->__construct();
+
+        $entity = new class extends EntityNew {
+            protected $id;
+        };
+
+        $mock = Mockery::mock($entity::class)->makePartial();
+        $mock->shouldReceive('clean')->once();
+        $mock->__construct([], ['markClean' => true]);
+
+        $mock = Mockery::mock($entity::class)->makePartial();
+        $mock->shouldReceive('clean')->once();
+        $mock->__construct(['id' => 1], ['markClean' => true]);
     }
 
     /**
@@ -901,19 +937,15 @@ class EntityTest extends TestCase
      */
     public function testConstructorWithMarkNew(): void
     {
-        $entity = $this->getMockBuilder(Entity::class)
-            ->onlyMethods(['setNew', 'clean'])
-            ->disableOriginalConstructor()
-            ->getMock();
-        $entity->expects($this->never())->method('clean');
-        $entity->__construct(['a' => 'b', 'c' => 'd']);
+        $this->expectNotToPerformAssertions();
 
-        $entity = $this->getMockBuilder(Entity::class)
-            ->onlyMethods(['setNew'])
-            ->disableOriginalConstructor()
-            ->getMock();
-        $entity->expects($this->once())->method('setNew');
-        $entity->__construct(['a' => 'b', 'c' => 'd'], ['markNew' => true]);
+        $mock = Mockery::mock(EntityNew::class)->makePartial();
+        $mock->shouldReceive('setNew')->never();
+        $mock->__construct();
+
+        $mock = Mockery::mock(EntityNew::class)->makePartial();
+        $mock->shouldReceive('setNew')->once();
+        $mock->__construct([], ['markNew' => true]);
     }
 
     /**
@@ -922,7 +954,7 @@ class EntityTest extends TestCase
     public function testToArray(): void
     {
         $data = ['name' => 'James', 'age' => 20, 'phones' => ['123', '457']];
-        $entity = new Entity($data);
+        $entity = new UserProps($data);
 
         $this->assertEquals($data, $entity->toArray());
     }
@@ -933,13 +965,28 @@ class EntityTest extends TestCase
     public function testToArrayRecursive(): void
     {
         $data = ['id' => 1, 'name' => 'James', 'age' => 20, 'phones' => ['123', '457']];
-        $user = new Extending($data);
+        $user = new class ($data) extends EntityNew {
+            protected $id;
+            protected $name;
+            protected $age;
+            protected $phones;
+            protected $comments;
+            protected $profile;
+        };
         $comments = [
-            new NonExtending(['user_id' => 1, 'body' => 'Comment 1']),
-            new NonExtending(['user_id' => 1, 'body' => 'Comment 2']),
+            new class (['user_id' => 1, 'body' => 'Comment 1']) extends EntityNew {
+                protected $user_id;
+                protected $body;
+            },
+            new class (['user_id' => 1, 'body' => 'Comment 2']) extends EntityNew {
+                protected $user_id;
+                protected $body;
+            },
         ];
         $user->comments = $comments;
-        $user->profile = new Entity(['email' => 'mark@example.com']);
+        $user->profile = new class (['email' => 'mark@example.com']) extends EntityNew {
+            protected $email;
+        };
 
         $expected = [
             'id' => 1,
@@ -960,13 +1007,18 @@ class EntityTest extends TestCase
      */
     public function testToArrayMixed(): void
     {
-        $test = new Entity([
+        $test = new class ([
             'id' => 1,
             'foo' => [
-                new Entity(['hi' => 'test']),
+                new class (['hi' => 'test']) extends EntityNew {
+                    protected $hi;
+                },
                 'notentity' => 1,
             ],
-        ]);
+        ]) extends EntityNew {
+            protected $id;
+            protected $foo;
+        };
         $expected = [
             'id' => 1,
             'foo' => [
@@ -980,17 +1032,17 @@ class EntityTest extends TestCase
     /**
      * Test that get accessors are called when converting to arrays.
      */
-    public function testToArrayWithAccessor(): void
+    public function testToArrayWithPatchableor(): void
     {
-        $entity = new class extends Entity {
-            protected function _getName(?string $name): string
-            {
-                return 'Jose';
+        $entity = new class extends EntityNew {
+            protected $name {
+                get => 'Mr. ' . $this->name;
             }
+            protected $email;
         };
         $entity->setAccess('*', true);
         $entity->set(['name' => 'Mark', 'email' => 'mark@example.com']);
-        $expected = ['name' => 'Jose', 'email' => 'mark@example.com'];
+        $expected = ['name' => 'Mr. Mark', 'email' => 'mark@example.com'];
         $this->assertEquals($expected, $entity->toArray());
     }
 
@@ -1000,7 +1052,11 @@ class EntityTest extends TestCase
     public function testToArrayHiddenProperties(): void
     {
         $data = ['secret' => 'sauce', 'name' => 'mark', 'id' => 1];
-        $entity = new Entity($data);
+        $entity = new class ($data) extends EntityNew {
+            protected $secret;
+            protected $name;
+            protected $id;
+        };
         $entity->setHidden(['secret']);
         $this->assertEquals(['name' => 'mark', 'id' => 1], $entity->toArray());
     }
@@ -1011,7 +1067,11 @@ class EntityTest extends TestCase
     public function testSetHidden(): void
     {
         $data = ['secret' => 'sauce', 'name' => 'mark', 'id' => 1];
-        $entity = new Entity($data);
+        $entity = new class ($data) extends EntityNew {
+            protected $secret;
+            protected $name;
+            protected $id;
+        };
         $entity->setHidden(['secret']);
 
         $result = $entity->getHidden();
@@ -1029,7 +1089,11 @@ class EntityTest extends TestCase
     public function testSetHiddenWithMerge(): void
     {
         $data = ['secret' => 'sauce', 'name' => 'mark', 'id' => 1];
-        $entity = new Entity($data);
+        $entity = new class ($data) extends EntityNew {
+            protected $secret;
+            protected $name;
+            protected $id;
+        };
         $entity->setHidden(['secret'], true);
 
         $result = $entity->getHidden();
@@ -1050,11 +1114,11 @@ class EntityTest extends TestCase
      */
     public function testToArrayVirtualProperties(): void
     {
-        $entity = new class extends Entity {
-            protected function _getName(?string $name): string
-            {
-                return 'Jose';
+        $entity = new class extends EntityNew {
+            protected $name {
+                get => 'Jose';
             }
+            protected $email;
         };
         $entity->setAccess('*', true);
         $entity->set(['email' => 'mark@example.com']);
@@ -1076,7 +1140,10 @@ class EntityTest extends TestCase
      */
     public function testGetVisible(): void
     {
-        $entity = new Entity();
+        $entity = new class extends EntityNew {
+            protected $foo;
+            protected $bar;
+        };
         $entity->foo = 'foo';
         $entity->bar = 'bar';
 
@@ -1089,21 +1156,25 @@ class EntityTest extends TestCase
      */
     public function testSetVirtualWithMerge(): void
     {
-        $data = ['virtual' => 'sauce', 'name' => 'mark', 'id' => 1];
-        $entity = new Entity($data);
-        $entity->setVirtual(['virtual']);
+        $data = ['virt' => 'sauce', 'name' => 'mark', 'id' => 1];
+        $entity = new class ($data) extends EntityNew {
+            protected $virt;
+            protected $name;
+            protected $id;
+        };
+        $entity->setVirtual(['virt']);
 
         $result = $entity->getVirtual();
-        $this->assertSame(['virtual'], $result);
+        $this->assertSame(['virt'], $result);
 
         $entity->setVirtual(['name'], true);
 
         $result = $entity->getVirtual();
-        $this->assertSame(['virtual', 'name'], $result);
+        $this->assertSame(['virt', 'name'], $result);
 
         $entity->setVirtual(['name'], true);
         $result = $entity->getVirtual();
-        $this->assertSame(['virtual', 'name'], $result);
+        $this->assertSame(['virt', 'name'], $result);
     }
 
     /**
@@ -1111,7 +1182,7 @@ class EntityTest extends TestCase
      */
     public function testGetErrorAndSetError(): void
     {
-        $entity = new Entity();
+        $entity = new EntityNew();
         $this->assertEmpty($entity->getErrors());
 
         $entity->setError('foo', 'bar');
@@ -1124,7 +1195,7 @@ class EntityTest extends TestCase
         $this->assertEquals($expected, $result);
 
         $indexedErrors = [2 => ['foo' => 'bar']];
-        $entity = new Entity();
+        $entity = new EntityNew();
         $entity->setError('indexes', $indexedErrors);
 
         $expectedIndexed = [
@@ -1139,7 +1210,7 @@ class EntityTest extends TestCase
      */
     public function testGetErrorNested(): void
     {
-        $entity = new Entity();
+        $entity = new EntityNew();
         $entity->setError('options', ['subpages' => ['_empty' => 'required']]);
 
         $expected = [
@@ -1156,14 +1227,20 @@ class EntityTest extends TestCase
      */
     public function testErrorsDeep(): void
     {
-        $user = new Entity();
-        $owner = new NonExtending();
-        $author = new Extending([
+        $user = new EntityNew();
+        $owner = new EntityNew();
+        $author = new class ([
             'foo' => 'bar',
             'thing' => 'baz',
             'user' => $user,
             'owner' => $owner,
-        ]);
+        ]) extends EntityNew {
+            protected $foo;
+            protected $thing;
+            protected $user;
+            protected $owner;
+            protected $multiple;
+        };
         $author->setError('thing', ['this is a mistake']);
         $user->setErrors(['a' => ['error1'], 'b' => ['error2']]);
         $owner->setErrors(['c' => ['error3'], 'd' => ['error4']]);
@@ -1195,11 +1272,15 @@ class EntityTest extends TestCase
      */
     public function testHasErrors(): void
     {
-        $entity = new Entity();
+        $entity = new class extends EntityNew {
+            protected $nested;
+        };
         $hasErrors = $entity->hasErrors();
         $this->assertFalse($hasErrors);
 
-        $nestedEntity = new Entity();
+        $nestedEntity = new class extends EntityNew {
+            protected $description;
+        };
         $entity->set([
             'nested' => $nestedEntity,
         ]);
@@ -1232,13 +1313,17 @@ class EntityTest extends TestCase
      */
     public function testErrorPathReading(): void
     {
-        $assoc = new Entity();
-        $assoc2 = new NonExtending();
-        $entity = new Extending([
+        $assoc = new EntityNew();
+        $assoc2 = new EntityNew();
+        $entity = new class ([
             'field' => 'value',
             'one' => $assoc,
             'many' => [$assoc2],
-        ]);
+        ]) extends EntityNew {
+            protected $field;
+            protected $one;
+            protected $many;
+        };
         $entity->setError('wrong', 'Bad stuff');
         $assoc->setError('nope', 'Terrible things');
         $assoc2->setError('nope', 'Terrible things');
@@ -1262,7 +1347,9 @@ class EntityTest extends TestCase
      */
     public function testDirtyRemovesError(): void
     {
-        $entity = new Entity(['a' => 'b']);
+        $entity = new class ((['a' => 'b'])) extends EntityNew {
+            protected $a;
+        };
         $entity->setError('a', 'is not good');
         $entity->set('a', 'c');
         $this->assertEmpty($entity->getError('a'));
@@ -1277,7 +1364,9 @@ class EntityTest extends TestCase
      */
     public function testCleanRemovesErrors(): void
     {
-        $entity = new Entity(['a' => 'b']);
+        $entity = new class ((['a' => 'b'])) extends EntityNew {
+            protected $a;
+        };
         $entity->setError('a', 'is not good');
         $entity->clean();
         $this->assertEmpty($entity->getErrors());
@@ -1286,9 +1375,9 @@ class EntityTest extends TestCase
     /**
      * Tests getAccessible() method
      */
-    public function testGetAccessible(): void
+    public function testGetPatchable(): void
     {
-        $entity = new Entity();
+        $entity = new EntityNew();
         $entity->setAccess('*', false);
         $entity->setAccess('bar', true);
 
@@ -1303,9 +1392,9 @@ class EntityTest extends TestCase
     /**
      * Tests isAccessible() and setAccess() methods
      */
-    public function testIsAccessible(): void
+    public function testIsPatchable(): void
     {
-        $entity = new Entity();
+        $entity = new EntityNew();
         $entity->setAccess('*', false);
         $this->assertFalse($entity->isAccessible('foo'));
         $this->assertFalse($entity->isAccessible('bar'));
@@ -1330,9 +1419,9 @@ class EntityTest extends TestCase
     /**
      * Tests that an array can be used to set
      */
-    public function testAccessibleAsArray(): void
+    public function testPatchableAsArray(): void
     {
-        $entity = new Entity();
+        $entity = new EntityNew();
         $entity->setAccess(['foo', 'bar', 'baz'], true);
         $this->assertTrue($entity->isAccessible('foo'));
         $this->assertTrue($entity->isAccessible('bar'));
@@ -1352,9 +1441,9 @@ class EntityTest extends TestCase
     /**
      * Tests that a wildcard can be used for setting accessible properties
      */
-    public function testAccessibleWildcard(): void
+    public function testPatchableWildcard(): void
     {
-        $entity = new Entity();
+        $entity = new EntityNew();
         $entity->setAccess(['foo', 'bar', 'baz'], true);
         $this->assertTrue($entity->isAccessible('foo'));
         $this->assertTrue($entity->isAccessible('bar'));
@@ -1376,9 +1465,12 @@ class EntityTest extends TestCase
     /**
      * Tests that only accessible properties can be set
      */
-    public function testSetWithAccessible(): void
+    public function testSetWithPatchable(): void
     {
-        $entity = new Entity(['foo' => 1, 'bar' => 2]);
+        $entity = new class (['foo' => 1, 'bar' => 2]) extends EntityNew {
+            protected $foo;
+            protected $bar;
+        };
         $options = ['guard' => true];
         $entity->setAccess('*', false);
         $entity->setAccess('foo', true);
@@ -1395,9 +1487,12 @@ class EntityTest extends TestCase
     /**
      * Tests that only accessible properties can be set
      */
-    public function testSetWithAccessibleWithArray(): void
+    public function testSetWithPatchableWithArray(): void
     {
-        $entity = new Entity(['foo' => 1, 'bar' => 2]);
+        $entity = new class (['foo' => 1, 'bar' => 2]) extends EntityNew {
+            protected $foo;
+            protected $bar;
+        };
         $options = ['guard' => true];
         $entity->setAccess('*', false);
         $entity->setAccess('foo', true);
@@ -1414,9 +1509,14 @@ class EntityTest extends TestCase
     /**
      * Test that accessible() and single property setting works.
      */
-    public function testSetWithAccessibleSingleProperty(): void
+    public function testSetWithPatchableSingleProperty(): void
     {
-        $entity = new Entity(['foo' => 1, 'bar' => 2]);
+        $entity = new class (['foo' => 1, 'bar' => 2]) extends EntityNew {
+            protected $foo;
+            protected $bar;
+            protected $title;
+            protected $body;
+        };
         $entity->setAccess('*', false);
         $entity->setAccess('title', true);
 
@@ -1436,7 +1536,10 @@ class EntityTest extends TestCase
      */
     public function testToString(): void
     {
-        $entity = new Entity(['foo' => 1, 'bar' => 2]);
+        $entity = new class (['foo' => 1, 'bar' => 2]) extends EntityNew {
+            protected $foo;
+            protected $bar;
+        };
         $this->assertEquals(json_encode($entity, JSON_PRETTY_PRINT), (string)$entity);
     }
 
@@ -1445,7 +1548,10 @@ class EntityTest extends TestCase
      */
     public function testDebugInfo(): void
     {
-        $entity = new Entity(['foo' => 'bar'], ['markClean' => true]);
+        $entity = new class (['foo' => 'bar'], ['markClean' => true]) extends EntityNew {
+            protected $foo;
+            protected $somethingElse;
+        };
         $entity->somethingElse = 'value';
         $entity->setAccess('id', false);
         $entity->setAccess('name', true);
@@ -1478,7 +1584,7 @@ class EntityTest extends TestCase
      */
     public function testGetAndSetSource(): void
     {
-        $entity = new Entity();
+        $entity = new EntityNew();
         $this->assertSame('', $entity->getSource());
         $entity->setSource('foos');
         $this->assertSame('foos', $entity->getSource());
@@ -1500,7 +1606,7 @@ class EntityTest extends TestCase
     public function testEmptyProperties(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $entity = new Entity();
+        $entity = new EntityNew();
         $entity->get('');
     }
 
@@ -1509,10 +1615,13 @@ class EntityTest extends TestCase
      */
     public function testIsDirtyFromClone(): void
     {
-        $entity = new Entity(
+        $entity = new class (
             ['a' => 1, 'b' => 2],
             ['markNew' => false, 'markClean' => true],
-        );
+        ) extends EntityNew {
+            protected $a;
+            protected $b;
+        };
 
         $this->assertFalse($entity->isNew());
         $this->assertFalse($entity->isDirty());
@@ -1530,7 +1639,7 @@ class EntityTest extends TestCase
      */
     public function testGetSetInvalid(): void
     {
-        $entity = new Entity();
+        $entity = new EntityNew();
         $return = $entity->setInvalid([
             'title' => 'albert',
             'body' => 'einstein',
@@ -1566,7 +1675,7 @@ class EntityTest extends TestCase
      */
     public function testGetSetInvalidField(): void
     {
-        $entity = new Entity();
+        $entity = new EntityNew();
         $return = $entity->setInvalidField('title', 'albert');
         $this->assertSame($entity, $return);
         $this->assertSame('albert', $entity->getInvalidField('title'));
@@ -1581,7 +1690,7 @@ class EntityTest extends TestCase
      */
     public function testGetInvalidFieldNull(): void
     {
-        $entity = new Entity();
+        $entity = new EntityNew();
         $this->assertNull($entity->getInvalidField('foo'));
     }
 
@@ -1590,7 +1699,7 @@ class EntityTest extends TestCase
      */
     public function testIsEmpty(): void
     {
-        $entity = new Entity([
+        $entity = new class ([
             'array' => ['foo' => 'bar'],
             'emptyArray' => [],
             'object' => new stdClass(),
@@ -1602,7 +1711,19 @@ class EntityTest extends TestCase
             'floatZero' => 0.0,
             'floatNonZero' => 1.5,
             'null' => null,
-        ]);
+        ]) extends EntityNew {
+            protected $array;
+            protected $emptyArray;
+            protected $object;
+            protected $string;
+            protected $stringZero;
+            protected $emptyString;
+            protected $intZero;
+            protected $intNotZero;
+            protected $floatZero;
+            protected $floatNonZero;
+            protected $null;
+        };
 
         $this->assertFalse($entity->isEmpty('array'));
         $this->assertTrue($entity->isEmpty('emptyArray'));
@@ -1622,7 +1743,7 @@ class EntityTest extends TestCase
      */
     public function testHasValue(): void
     {
-        $entity = new Entity([
+        $entity = new class ([
             'array' => ['foo' => 'bar'],
             'emptyArray' => [],
             'object' => new stdClass(),
@@ -1634,7 +1755,19 @@ class EntityTest extends TestCase
             'floatZero' => 0.0,
             'floatNonZero' => 1.5,
             'null' => null,
-        ]);
+        ]) extends EntityNew {
+            protected $array;
+            protected $emptyArray;
+            protected $object;
+            protected $string;
+            protected $stringZero;
+            protected $emptyString;
+            protected $intZero;
+            protected $intNotZero;
+            protected $floatZero;
+            protected $floatNonZero;
+            protected $null;
+        };
 
         $this->assertTrue($entity->hasValue('array'));
         $this->assertFalse($entity->hasValue('emptyArray'));
@@ -1654,11 +1787,15 @@ class EntityTest extends TestCase
      */
     public function testIsOriginalField(): void
     {
-        $entity = new Entity(['foo' => null]);
+        $entity = new class (['foo' => null]) extends EntityNew {
+            protected $foo;
+        };
         $return = $entity->isOriginalField('foo');
         $this->assertSame(true, $return);
 
-        $entity = new Entity([]);
+        $entity = new class extends EntityNew {
+            protected $foo;
+        };
         $entity->set('foo', null);
         $return = $entity->isOriginalField('foo');
         $this->assertSame(false, $return);
@@ -1672,12 +1809,20 @@ class EntityTest extends TestCase
      */
     public function testGetOriginalFields(): void
     {
-        $entity = new Entity(['foo' => 'foo', 'bar' => 'bar']);
+        $entity = new class (['foo' => 'foo', 'bar' => 'bar']) extends EntityNew {
+            protected $foo;
+            protected $bar;
+            protected $baz;
+        };
         $entity->set('baz', 'baz');
         $return = $entity->getOriginalFields();
         $this->assertEquals(['foo', 'bar'], $return);
 
-        $entity = new Entity([]);
+        $entity = new class extends EntityNew {
+            protected $foo;
+            protected $bar;
+            protected $baz;
+        };
         $entity->set('foo', 'foo');
         $entity->set('bar', 'bar');
         $entity->set('baz', 'baz');
@@ -1690,7 +1835,9 @@ class EntityTest extends TestCase
      */
     public function testSetOriginalFieldInSetDirty(): void
     {
-        $entity = new Entity([]);
+        $entity = new class extends EntityNew {
+            protected $foo;
+        };
         $entity->set('foo', 'bar');
 
         $return = $entity->isOriginalField('foo');
@@ -1707,7 +1854,9 @@ class EntityTest extends TestCase
      */
     public function testSetOriginalFieldInClean(): void
     {
-        $entity = new Entity([]);
+        $entity = new class extends EntityNew {
+            protected $foo;
+        };
         $entity->set('foo', 'bar');
 
         $return = $entity->isOriginalField('foo');
@@ -1725,8 +1874,12 @@ class EntityTest extends TestCase
      */
     public function testGetErrorsRecursionError(): void
     {
-        $entity = new Entity();
-        $secondEntity = new Entity();
+        $entity = new class extends EntityNew {
+            protected $child;
+        };
+        $secondEntity = new class extends EntityNew {
+            protected $parent;
+        };
 
         $entity->set('child', $secondEntity);
         $secondEntity->set('parent', $entity);
@@ -1743,8 +1896,12 @@ class EntityTest extends TestCase
      */
     public function testHasErrorsRecursionError(): void
     {
-        $entity = new Entity();
-        $secondEntity = new Entity();
+        $entity = new class extends EntityNew {
+            protected $child;
+        };
+        $secondEntity = new class extends EntityNew {
+            protected $parent;
+        };
 
         $entity->set('child', $secondEntity);
         $secondEntity->set('parent', $entity);

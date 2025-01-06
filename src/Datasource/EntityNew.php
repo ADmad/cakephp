@@ -17,18 +17,35 @@ declare(strict_types=1);
 namespace Cake\Datasource;
 
 use Cake\Collection\Collection;
+use Cake\Core\Exception\CakeException;
 use Cake\Datasource\Exception\MissingPropertyException;
-use Cake\ORM\Entity;
 use Cake\Utility\Hash;
 use Cake\Utility\Inflector;
 use InvalidArgumentException;
+use PropertyHookType;
+use ReflectionException;
+use ReflectionProperty;
 
 /**
- * An entity represents a single result row from a repository. It exposes the
- * methods for retrieving and storing fields associated in this row.
+ * Differences from Cake\ORM\Entity:
+ *
+ * - No `useSetter` option since it's now possible to skip the `set` hook for properties.
+ * - Fields set as virtual using `setVirtual()` can be accessed only using the same casing,
+ *   unlike ORM\Entity which allows accessing using either underscored or camel cased name.
+ * - Indirect modification of properties is not allowed. For example, you cannot do
+ *   `$entity->field['key'] = 'value'`, you must use `$entity->field = array_merge($entity->field, ['key' => 'value'])`.
+ * - `has()` method will return false only for uninitialized properties,
+ *   it will return `true` for properties set to `null`.
  */
-trait EntityTrait
+class EntityNew implements EntityInterface, InvalidPropertyInterface
 {
+    /**
+     * Holds field names for initialized properties
+     *
+     * @var array<string>
+     */
+    protected array $propertyFields = [];
+
     /**
      * Holds all fields and their values for this entity.
      *
@@ -143,6 +160,77 @@ trait EntityTrait
     protected bool $requireFieldPresence = false;
 
     /**
+     * Whether to allow dynamic properties to be set.
+     *
+     * This is used as the default value for all entities.
+     *
+     * @var bool
+     */
+    public static bool $allowDynamicProperties = false;
+
+    /**
+     * Whether setting dynamic properties is allowed for this entity.
+     *
+     * @var bool
+     */
+    protected bool $dynamicPropsAllowed;
+
+    /**
+     * Initializes the internal properties of this entity out of the
+     * keys in an array. The following list of options can be used:
+     *
+     * - useSetters: whether use internal setters for properties or not
+     * - markClean: whether to mark all properties as clean after setting them
+     * - markNew: whether this instance has not yet been persisted
+     * - guard: whether to prevent inaccessible properties from being set (default: false)
+     * - source: A string representing the alias of the repository this entity came from
+     *
+     * ### Example:
+     *
+     * ```
+     *  $entity = new Entity(['id' => 1, 'name' => 'Andrew'])
+     * ```
+     *
+     * @param array<string, mixed> $fields Hash of fields to set in this entity
+     * @param array<string, mixed> $options list of options to use when creating this entity
+     */
+    public function __construct(array $fields = [], array $options = [])
+    {
+        if (!isset($this->dynamicPropsAllowed)) {
+            $this->dynamicPropsAllowed = static::$allowDynamicProperties;
+        }
+
+        $options += [
+            'useSetters' => true,
+            'markClean' => false,
+            'markNew' => null,
+            'guard' => false,
+            'source' => null,
+        ];
+
+        if ($options['source'] !== null) {
+            $this->setSource($options['source']);
+        }
+
+        if ($options['markNew'] !== null) {
+            $this->setNew($options['markNew']);
+        }
+
+        if ($fields) {
+            $this->setOriginalField(array_keys($fields));
+
+            $this->set($fields, [
+                'setter' => $options['useSetters'],
+                'guard' => $options['guard'],
+            ]);
+        }
+
+        if ($options['markClean']) {
+            $this->clean();
+        }
+    }
+
+    /**
      * Magic getter to access fields that have been set in this entity
      *
      * @param string $field Name of the field to access
@@ -209,15 +297,6 @@ trait EntityTrait
      * echo $entity->id // prints 1
      * ```
      *
-     * Some times it is handy to bypass setter functions in this entity when assigning
-     * fields. You can achieve this by disabling the `setter` option using the
-     * `$options` parameter:
-     *
-     * ```
-     * $entity->set('name', 'Andrew', ['setter' => false]);
-     * $entity->set(['name' => 'Andrew', 'id' => 1], ['setter' => false]);
-     * ```
-     *
      * Mass assignment should be treated carefully when accepting user input, by default
      * entities will guard all fields when fields are assigned in bulk. You can disable
      * the guarding for a single set call with the `guard` option:
@@ -275,6 +354,12 @@ trait EntityTrait
         }
 
         foreach ($field as $name => $value) {
+            $propExists = property_exists($this, (string)$name);
+
+            if (!$this->dynamicPropsAllowed && !$propExists) {
+                throw new CakeException(sprintf('Missing property "%s" in "%s"', $name, static::class));
+            }
+
             /** @psalm-suppress RedundantCastGivenDocblockType */
             $name = (string)$name;
             if ($options['guard'] === true && !$this->isAccessible($name)) {
@@ -293,13 +378,24 @@ trait EntityTrait
             if (
                 $this->isOriginalField($name) &&
                 !array_key_exists($name, $this->_original) &&
-                array_key_exists($name, $this->_fields) &&
-                $value !== $this->_fields[$name]
+                in_array($name, $this->propertyFields, true) &&
+                (
+                    $propExists && $value !== $this->{$name} ||
+                    (array_key_exists($name, $this->_fields) && $value !== $this->_fields[$name])
+                )
             ) {
-                $this->_original[$name] = $this->_fields[$name];
+                $this->_original[$name] = $this->{$name};
             }
 
-            $this->_fields[$name] = $value;
+            if (!in_array($name, $this->propertyFields, true)) {
+                $this->propertyFields[] = $name;
+            }
+
+            if ($propExists) {
+                $this->{$name} = $value;
+            } else {
+                $this->_fields[$name] = $value;
+            }
         }
 
         return $this;
@@ -320,9 +416,17 @@ trait EntityTrait
 
         $value = null;
         $fieldIsPresent = false;
-        if (array_key_exists($field, $this->_fields)) {
+        $propExists = property_exists($this, $field);
+        if (
+            in_array($field, $this->propertyFields, true) ||
+            $propExists
+        ) {
             $fieldIsPresent = true;
-            $value = &$this->_fields[$field];
+            if ($propExists) {
+                $value = $this->{$field};
+            } elseif (array_key_exists($field, $this->_fields)) {
+                $value = &$this->_fields[$field];
+            }
         }
 
         $method = static::_accessor($field, 'get');
@@ -399,12 +503,12 @@ trait EntityTrait
     {
         $originals = $this->_original;
         $originalKeys = array_keys($originals);
-        foreach ($this->_fields as $key => $value) {
+        foreach ($this->propertyFields as $key) {
             if (
                 !in_array($key, $originalKeys, true) &&
                 $this->isOriginalField($key)
             ) {
-                $originals[$key] = $value;
+                $originals[$key] = $this->{$key};
             }
         }
 
@@ -412,16 +516,22 @@ trait EntityTrait
     }
 
     /**
-     * Returns whether this entity contains a field named $field.
-     *
-     * It will return `true` even for fields set to `null`.
+     * Returns whether this entity contains a field named $field and is initialized.
      *
      * ### Example:
      *
      * ```
-     * $entity = new Entity(['id' => 1, 'name' => null]);
+     * class MyEntity extends Entity
+     * {
+     *    protected $id;
+     *    protected $name;
+     *    protected $first_name;
+     * }
+     *
+     * $entity = new MyEntity(['id' => 1, 'name' => null]);
      * $entity->has('id'); // true
      * $entity->has('name'); // true
+     * $entity->has('first_name'); // false
      * $entity->has('last_name'); // false
      * ```
      *
@@ -431,17 +541,21 @@ trait EntityTrait
      * $entity->has(['name', 'last_name']);
      * ```
      *
-     * When checking multiple fields all fields must have a value (even `null`)
-     * present for the method to return `true`.
-     *
      * @param array<string>|string $field The field or fields to check.
      * @return bool
      */
     public function has(array|string $field): bool
     {
         foreach ((array)$field as $prop) {
-            if (!array_key_exists($prop, $this->_fields) && !static::_accessor($prop, 'get')) {
-                return false;
+            $rp = $this->reflectedProperty($prop);
+            if ($rp === null) {
+                if (!array_key_exists($prop, $this->_fields) && !static::_accessor($prop, 'get')) {
+                    return false;
+                }
+            } else {
+                if (!$rp->getHook(PropertyHookType::Get) && !$rp->isInitialized($this)) {
+                    return false;
+                }
             }
         }
 
@@ -518,6 +632,23 @@ trait EntityTrait
         $field = (array)$field;
         foreach ($field as $p) {
             unset($this->_fields[$p], $this->_dirty[$p]);
+
+            $pos = array_search($p, $this->propertyFields, true);
+            if ($pos !== false) {
+                unset($this->propertyFields[$pos]);
+            }
+
+            $rp = $this->reflectedProperty($p);
+            if ($rp === null) {
+                continue;
+            }
+
+            if ($rp->getHooks()) {
+                $this->{$p} = null;
+                continue;
+            } else {
+                unset($this->{$p});
+            }
         }
 
         return $this;
@@ -596,8 +727,7 @@ trait EntityTrait
      */
     public function getVisible(): array
     {
-        $fields = array_keys($this->_fields);
-        $fields = array_merge($fields, $this->_virtual);
+        $fields = array_merge($this->propertyFields, $this->_virtual);
 
         return array_diff($fields, $this->_hidden);
     }
@@ -710,7 +840,7 @@ trait EntityTrait
             return static::$_accessors[$class][$type][$property] = '';
         }
 
-        if (static::class === Entity::class) {
+        if (static::class === EntityNew::class) {
             return '';
         }
 
@@ -885,11 +1015,9 @@ trait EntityTrait
      */
     public function isDirty(?string $field = null): bool
     {
-        if ($field === null) {
-            return !empty($this->_dirty);
-        }
-
-        return isset($this->_dirty[$field]);
+        return $field === null
+            ? $this->_dirty !== []
+            : isset($this->_dirty[$field]);
     }
 
     /**
@@ -915,7 +1043,7 @@ trait EntityTrait
         $this->_errors = [];
         $this->_invalid = [];
         $this->_original = [];
-        $this->setOriginalField(array_keys($this->_fields), false);
+        $this->setOriginalField($this->propertyFields, false);
     }
 
     /**
@@ -930,7 +1058,7 @@ trait EntityTrait
     public function setNew(bool $new)
     {
         if ($new) {
-            foreach ($this->_fields as $k => $p) {
+            foreach ($this->propertyFields as $k) {
                 $this->_dirty[$k] = true;
             }
         }
@@ -973,8 +1101,8 @@ trait EntityTrait
 
         $this->_hasBeenVisited = true;
         try {
-            foreach ($this->_fields as $field) {
-                if ($this->_readHasErrors($field)) {
+            foreach ($this->propertyFields as $field) {
+                if ($this->_readHasErrors($this->{$field})) {
                     return true;
                 }
             }
@@ -997,11 +1125,15 @@ trait EntityTrait
             return [];
         }
 
-        $diff = array_diff_key($this->_fields, $this->_errors);
+        $diff = array_diff_key($this->propertyFields, array_keys($this->_errors));
+        $values = [];
+        foreach ($diff as $field) {
+            $values[$field] = $this->{$field};
+        }
 
         $this->_hasBeenVisited = true;
         try {
-            $errors = $this->_errors + (new Collection($diff))
+            $errors = $this->_errors + (new Collection($values))
                 ->filter(function ($value) {
                     return is_array($value) || $value instanceof EntityInterface;
                 })
@@ -1151,20 +1283,20 @@ trait EntityTrait
     }
 
     /**
-     * Reads if there are errors for one or many objects.
+     * Reads if there are errors for one or many values.
      *
-     * @param \Cake\Datasource\EntityInterface|array $object The object to read errors from.
+     * @param mixed $value The object to read errors from.
      * @return bool
      */
-    protected function _readHasErrors(mixed $object): bool
+    protected function _readHasErrors(mixed $value): bool
     {
-        if ($object instanceof EntityInterface && $object->hasErrors()) {
+        if ($value instanceof EntityInterface && $value->hasErrors()) {
             return true;
         }
 
-        if (is_array($object)) {
-            foreach ($object as $value) {
-                if ($this->_readHasErrors($value)) {
+        if (is_array($value)) {
+            foreach ($value as $v) {
+                if ($this->_readHasErrors($v)) {
                     return true;
                 }
             }
@@ -1351,13 +1483,28 @@ trait EntityTrait
     }
 
     /**
+     * Get ReflectedProperty instance for a property.
+     *
+     * @param string $name Property name
+     * @return \ReflectionProperty|null
+     */
+    protected function reflectedProperty(string $name): ?ReflectionProperty
+    {
+        try {
+            return new ReflectionProperty($this, $name);
+        } catch (ReflectionException) {
+            return null;
+        }
+    }
+
+    /**
      * Returns a string representation of this object in a human readable format.
      *
      * @return string
      */
     public function __toString(): string
     {
-        return (string)json_encode($this, JSON_PRETTY_PRINT);
+        return json_encode($this, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
     }
 
     /**
@@ -1368,7 +1515,10 @@ trait EntityTrait
      */
     public function __debugInfo(): array
     {
-        $fields = $this->_fields;
+        $fields = [];
+        foreach ($this->propertyFields as $field) {
+            $fields[$field] = $this->{$field};
+        }
         foreach ($this->_virtual as $field) {
             $fields[$field] = $this->$field;
         }

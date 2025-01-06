@@ -2751,7 +2751,7 @@ class TableTest extends TestCase
         $table = $this->getTableLocator()->get('Articles');
         $entity = $table->get(1);
 
-        $entity->setPatchable('*', true);
+        $entity->setAccess('*', true);
         $entity->set($entity->toArray());
         $this->assertSame($entity, $table->save($entity));
     }
@@ -5662,7 +5662,7 @@ class TableTest extends TestCase
     /**
      * Test that findOrCreate allows patching of all $search keys
      */
-    public function testFindOrCreatePatchableFields(): void
+    public function testFindOrCreateAccessibleFields(): void
     {
         $articles = $this->getTableLocator()->get('Articles');
         $articles->setEntityClass(ProtectedEntity::class);
