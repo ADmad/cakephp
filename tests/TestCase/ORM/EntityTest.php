@@ -181,6 +181,12 @@ class EntityTest extends TestCase
     public function testSetOneParamWithSetter(): void
     {
         $entity = new class extends Entity {
+            protected ?string $stuff {
+                set(?string $value) {
+                    $this->_fields['stuff'] = 'Dr. ' . $value;
+                }
+            }
+
             protected function _setName(?string $name): string
             {
                 return 'Dr. ' . $name;
@@ -188,6 +194,9 @@ class EntityTest extends TestCase
         };
         $entity->set('name', 'Jones');
         $this->assertSame('Dr. Jones', $entity->name);
+
+        $entity->set('stuff', 'Jones');
+        $this->assertSame('Dr. Jones', $entity->stuff);
     }
 
     /**
@@ -218,6 +227,12 @@ class EntityTest extends TestCase
     public function testBypassSetters(): void
     {
         $entity = new class extends Entity {
+            protected ?string $oops {
+                set(?string $value) {
+                    throw new Exception('_setName should not have been called');
+                }
+            }
+
             protected function _setName(?string $name): string
             {
                 throw new Exception('_setName should not have been called');
@@ -238,6 +253,9 @@ class EntityTest extends TestCase
 
         $entity->set(['name' => 'foo', 'stuff' => 'bar'], ['setter' => false]);
         $this->assertSame('bar', $entity->stuff);
+
+        $entity->set('oops', 'Jones', ['setter' => false]);
+        $this->assertSame('Jones', $entity->oops);
     }
 
     /**
@@ -317,6 +335,12 @@ class EntityTest extends TestCase
     public function testGetCustomGetters(): void
     {
         $entity = new class extends Entity {
+            protected ?string $stuff {
+                get {
+                    return isset($this->_fields['stuff']) ? 'Mr. ' . $this->_fields['stuff'] : null;
+                }
+            }
+
             protected function _getName(string $name): string
             {
                 return 'Dr. ' . $name;
@@ -325,6 +349,13 @@ class EntityTest extends TestCase
         $entity->set('name', 'Jones');
         $this->assertSame('Dr. Jones', $entity->get('name'));
         $this->assertSame('Dr. Jones', $entity->get('name'));
+
+        $this->assertNull($entity->get('stuff'));
+        $entity->set('stuff', 'Jones', ['setter' => false]);
+        $this->assertSame('Mr. Jones', $entity->get('stuff'));
+
+        $entity->set('stuff', 'Davey');
+        $this->assertSame('Mr. Davey', $entity->get('stuff'));
     }
 
     /**
@@ -353,6 +384,12 @@ class EntityTest extends TestCase
     public function testGetCacheClearedByUnset(): void
     {
         $entity = new class extends Entity {
+            protected ?string $stuff {
+                get {
+                    return 'Mr. ' . ($this->_fields['stuff'] ?? null);
+                }
+            }
+
             protected function _getName(?string $name): string
             {
                 return 'Dr. ' . $name;
@@ -363,6 +400,12 @@ class EntityTest extends TestCase
 
         $entity->unset('name');
         $this->assertSame('Dr. ', $entity->get('name'));
+
+        $entity->set('stuff', 'Jones');
+        $this->assertSame('Mr. Jones', $entity->get('stuff'));
+
+        $entity->unset('stuff');
+        $this->assertSame('Mr. ', $entity->get('stuff'));
     }
 
     /**
