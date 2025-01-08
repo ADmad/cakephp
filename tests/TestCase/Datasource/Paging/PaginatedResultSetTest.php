@@ -25,6 +25,28 @@ use Cake\TestSuite\TestCase;
 
 class PaginatedResultSetTest extends TestCase
 {
+    public function testConstructor(): void
+    {
+        $array = ['a' => 'a', 'b' => 'b', 'c' => 'c'];
+        $paginatedResults = new PaginatedResultSet(
+            $array,
+            [],
+        );
+
+        $result = iterator_to_array($paginatedResults);
+        $this->assertsame($array, $result);
+        $this->assertSame(3, $paginatedResults->count());
+
+        $collection = new Collection($array);
+        $paginatedResults = new PaginatedResultSet(
+            $collection,
+            [],
+        );
+        $result = iterator_to_array($paginatedResults);
+        $this->assertsame($array, $result);
+        $this->assertSame(3, $paginatedResults->count());
+    }
+
     public function testItems(): void
     {
         $resultSet = new class ([]) extends ResultSet {

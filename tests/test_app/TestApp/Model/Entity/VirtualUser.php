@@ -11,6 +11,10 @@ class VirtualUser extends Entity
         'bonus',
     ];
 
+    protected $bonus {
+        get => 'bonus';
+    }
+
     protected function _getBonus(): string
     {
         return 'bonus';
