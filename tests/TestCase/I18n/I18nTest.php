@@ -135,6 +135,23 @@ class I18nTest extends TestCase
         $this->assertSame('7 months everything else', $result);
     }
 
+    public function testPluralSelectionFrench(): void
+    {
+        $translator = I18n::getTranslator('default', 'fr');
+
+        $result = $translator->translate('{0} apples', ['_count' => 1, 1]);
+        $this->assertSame('1 pomme', $result);
+
+        $result = $translator->translate('{0} apples', ['_count' => 2, 2]);
+        $this->assertSame('2 pommes', $result);
+
+        $result = $translator->translate('{0} apples', ['_count' => 1000000, 1000000]);
+        $this->assertSame('1000000 de pommes', $result);
+
+        $result = $translator->translate('{0} apples', ['_count' => 1000001, 1000001]);
+        $this->assertSame('1000001 pommes', $result);
+    }
+
     /**
      * Tests that custom translation packages can be created on the fly and used later on
      */

@@ -1,0 +1,5 @@
+msgid "{0} apple"
+msgid_plural "{0} apples"
+msgstr[0] "{0} pomme"
+msgstr[1] "{0} de pommes"
+msgstr[2] "{0} pommes"
